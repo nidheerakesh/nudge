@@ -1,0 +1,13 @@
+{
+  "name": "onething",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "db:local": "wrangler d1 execute onething-db --local --file=schema.sql",
+    "db:remote": "wrangler d1 execute onething-db --remote --file=schema.sql",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
