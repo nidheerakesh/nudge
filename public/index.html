@@ -6,8 +6,7 @@
 <title>Nudge</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<meta name="theme-color" content="#F7F3FF" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#1A1025" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F7F3FF">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -225,6 +224,7 @@ function h(t,a,...c){
   return e;
 }
 const P={
+  check:'<path d="M20 6 9 17l-5-5"/>',
   sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   inbox:'<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"/>',
   flag:'<path d="M4 22V4M4 4h13l-2 4 2 4H4"/>',
@@ -339,10 +339,12 @@ async function del(t,id,nm){
     S[t]=S[t].concat([o]);render();toast('Restored.');
   }]});
 }
-window.addEventListener('pagehide',()=>{
+function flushPD(){
   for(const[k,p]of PD){clearTimeout(p.tm);try{fetch('/api/'+k,{method:'DELETE',headers:{'x-pin':PIN},keepalive:true});}catch(e){}}
   PD.clear();
-});
+}
+window.addEventListener('pagehide',flushPD);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushPD();});
 window.addEventListener('unhandledrejection',e=>{if(e.reason&&e.reason.api)fail(e.reason);});
 async function upd(t,id,b){
   const o=S[t].find(x=>x.id===id);if(!o)return;
@@ -371,7 +373,8 @@ function fin(k,id,on=1){
 
 function toast(m,o){
   o=o||{};
-  const e=$('#toast'),hide=()=>{clearTimeout(toast.t);e.className='';e.replaceChildren();};
+  const e=$('#toast');e.setAttribute('role',o.err?'alert':'status');
+  const hide=()=>{clearTimeout(toast.t);e.className='';e.replaceChildren();};
   const bs=[];
   if(o.btn)bs.push(h('button',{type:'button',onclick:()=>{hide();o.btn[1]();}},o.btn[0]));
   if(o.btn||o.err)bs.push(h('button',{type:'button','aria-label':'Dismiss',onclick:hide},I('x')));
@@ -743,11 +746,14 @@ mono:{n:'Mono and red',L:['#FAFAFA','#FFFFFF','#18181B','#27272A','#DC2626','#F4
 const TK=['--color-background','--color-card','--color-foreground','--color-primary','--color-accent','--color-muted','--color-muted-foreground','--color-border'];
 function lsGet(k,d){try{return localStorage.getItem(k)||d}catch(e){return d}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+const dkm=()=>matchMedia('(prefers-color-scheme: dark)');
+function mqListen(f){const q=dkm();q.addEventListener?q.addEventListener('change',f):q.addListener(f);}
 function theme(){
   const p=PAL[lsGet('pal','lav')]?lsGet('pal','lav'):'lav',m=lsGet('mode','system');
-  const dk=m==='dark'||(m==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);
+  const dk=m==='dark'||(m==='system'&&dkm().matches);
   const v=PAL[p],t=dk?v.D:v.L,r=document.documentElement.style;
   TK.forEach((k,i)=>r.setProperty(k,t[i]));
+  r.setProperty('--color-card-foreground',t[2]);
   r.setProperty('--color-ring',t[3]);
   r.setProperty('--color-on-primary',dk?t[0]:'#FFFFFF');r.setProperty('--color-on-accent',dk?t[0]:'#FFFFFF');
   r.setProperty('--color-hl',dk?'#4A1B3A':'#FCE7F3');r.setProperty('--color-on-hl',dk?'#FBCFE8':'#831843');
@@ -759,8 +765,8 @@ function vLook(){
   const c=h('div',{class:'card'},h('h2',{},'Look'),h('p',{class:'mut small',style:'margin:4px 0 12px'},'Pick a palette. Your choice stays on this device.'));
   c.append(h('div',{class:'thm'},Object.keys(PAL).map(k=>h('button',{class:'tb'+(k===cur?' on':''),'aria-pressed':k===cur?'true':'false',onclick:()=>{lsSet('pal',k);theme();render();}},
     h('span',{class:'sw',style:'display:flex;gap:2px'},PAL[k].L.slice(3,5).concat(PAL[k].D.slice(3,5)).map(x=>h('i',{style:'width:12px;height:22px;border-radius:3px;background:'+x}))),
-    h('span',{},PAL[k].n)))));
-  c.append(h('div',{class:'row t'},h('label',{},'Light or dark '),h('select',{'aria-label':'Light or dark',onchange:e=>{lsSet('mode',e.target.value);theme();}},
+    h('span',{},PAL[k].n),k===cur?I('check'):null))));
+  c.append(h('div',{class:'row t'},h('label',{for:'mode'},'Light or dark '),h('select',{id:'mode','aria-label':'Light or dark',onchange:e=>{lsSet('mode',e.target.value);theme();}},
     [['system','Match device'],['light','Light'],['dark','Dark']].map(([v,l])=>h('option',{value:v,selected:v===mo?'selected':false},l)))));
   return c;
 }
@@ -1290,7 +1296,7 @@ $('#mini').addEventListener('click',()=>go('today'));
 (async()=>{
   if(location.hash!=='#'+tab)history.replaceState(null,'','#'+tab);
   try{await load();}catch(e){toast('Could not load your data. Check the connection and refresh.',{err:1});}
-  theme();matchMedia("(prefers-color-scheme: dark)").addEventListener("change",theme);
+  theme();mqListen(theme);
   render();tick();crender();
 })();
 </script>
