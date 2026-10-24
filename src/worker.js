@@ -35,9 +35,104 @@ const ask = async (env, sys, u) => {
   return x.split('\n').map(l => l.replace(/^[\s\-*\d.)]+/, '').trim()).filter(Boolean);
 };
 
+const isD = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && new Date(d + 'T00:00:00Z').toISOString().slice(0, 10) === d;
+const ad = (d, k) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + k); return x.toISOString().slice(0, 10); };
+
+const SYS = td => 'You are Nudge, a calm study planner for a student. Today is ' + td + '. ' +
+  'You get their data as JSON: courses are exams (date = exam day, last = last day revision may be scheduled), topics per course in syllabus order [id,title,done], open tasks [id,title,course_id,due], quizzes, and today (max 3 priorities). ' +
+  'Rule: a task with a course_id must be due no later than that course\'s "last" day. Never schedule before today. "First half" of a course means the first ceil(n/2) topics in listed order. ' +
+  'Reply with ONLY a JSON object {"reply": string, "actions": [...]} and nothing else. reply is short, friendly, plain text. ' +
+  'actions are proposals the user confirms, use [] when nothing should change. Allowed: ' +
+  '{"op":"move_task","id":N,"due":"YYYY-MM-DD"}, {"op":"done_task","id":N}, {"op":"add_task","title":S,"course_id":N|null,"due":"YYYY-MM-DD"}, ' +
+  '{"op":"delete_task","id":N}, {"op":"add_quiz","course_id":N,"title":S,"date":"YYYY-MM-DD","topic_ids":[N]}, {"op":"replan_course","course_id":N}, {"op":"add_today","title":S}. ' +
+  'Use only ids from the data. For a quiz, add it and move the Revise tasks for its topics to days before the quiz.';
+
+const chat = async (b, env, db) => {
+  const td = isD(b.day) ? b.day : new Date().toISOString().slice(0, 10);
+  const ms = (Array.isArray(b.messages) ? b.messages : [])
+    .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
+    .slice(-12).map(m => ({ role: m.role, content: m.content.slice(0, 4000) }));
+  if (!ms.length || ms[ms.length - 1].role !== 'user') return json({ error: 'messages' }, 400);
+  const rs = await db.batch([
+    db.prepare('SELECT id, name, date, kind FROM courses ORDER BY id'),
+    db.prepare('SELECT id, course_id, title, done FROM topics ORDER BY id'),
+    db.prepare('SELECT id, title, course_id, due FROM tasks WHERE done=0 ORDER BY due IS NULL, due, id LIMIT 200'),
+    db.prepare('SELECT id, course_id, title, date, done FROM quizzes ORDER BY id'),
+    db.prepare('SELECT title, done FROM today WHERE day=? ORDER BY sort, id').bind(td)
+  ]);
+  const [cs, tp, tk, qz, tdy] = rs.map(r => r.results);
+  const C = new Map(cs.map(c => [c.id, c])), K = new Map(tk.map(t => [t.id, t])), TP = new Map(tp.map(t => [t.id, t]));
+  const ctx = {
+    courses: cs.map(c => ({ id: c.id, name: c.name, exam: c.date, last: c.date ? ad(c.date, -1) : null })),
+    topics: Object.fromEntries(cs.map(c => [c.id, tp.filter(t => t.course_id === c.id).map(t => [t.id, t.title, t.done])])),
+    tasks: tk.map(t => [t.id, t.title, t.course_id, t.due]),
+    quizzes: qz.filter(q => !q.done).map(q => ({ id: q.id, course_id: q.course_id, title: q.title, date: q.date })),
+    today: tdy.map(t => t.title + (t.done ? ' (done)' : ''))
+  };
+  const r = await env.AI.run(M, { messages: [{ role: 'system', content: SYS(td) + '\nData: ' + JSON.stringify(ctx) }, ...ms], max_tokens: 1500 });
+  const x = typeof (r && r.response) === 'object' ? JSON.stringify(r.response) : String((r && r.response) || '');
+  let o = null;
+  const a = x.indexOf('{'), z = x.lastIndexOf('}');
+  if (a >= 0 && z > a) try { o = JSON.parse(x.slice(a, z + 1)); } catch (e) {}
+  if (!o || typeof o !== 'object' || Array.isArray(o)) o = { reply: x.trim(), actions: [] };
+  const rp = String(o.reply || '').trim();
+  if (!rp && !Array.isArray(o.actions)) throw new Error('empty');
+  const nt = [], out = [];
+  const nm = t => '"' + t.title + '"';
+  const cap = (cid, d, lab) => {
+    const c = C.get(cid);
+    if (!c || !c.date) return d;
+    const l = ad(c.date, -1);
+    if (d <= l) return d;
+    if (l < td) { nt.push(lab + ' kept on today, but the ' + c.name + ' exam is today or past.'); return td; }
+    nt.push(lab + ' moved to ' + l + ', the day before the ' + c.name + ' exam.');
+    return l;
+  };
+  const okD = (d, lab) => { if (isD(d) && d >= td) return true; nt.push('Dropped ' + lab + ': date ' + (d || 'missing') + ' is not today or later.'); return false; };
+  let ntd = tdy.length;
+  for (const v of (Array.isArray(o.actions) ? o.actions : []).slice(0, 30)) {
+    if (!v || typeof v !== 'object') continue;
+    const op = v.op, id = Number(v.id), t = K.get(id);
+    if (op === 'move_task' || op === 'done_task' || op === 'delete_task') {
+      if (!t) { nt.push('Dropped a change to unknown task ' + v.id + '.'); continue; }
+      if (op !== 'move_task') { out.push({ op, id }); continue; }
+      if (!okD(v.due, 'moving ' + nm(t))) continue;
+      const d = cap(t.course_id, v.due, nm(t));
+      if (d !== t.due) out.push({ op, id, due: d });
+    } else if (op === 'add_task') {
+      const ti = String(v.title || '').trim().slice(0, 200), cid = v.course_id == null || v.course_id === '' ? null : Number(v.course_id);
+      if (!ti) continue;
+      if (cid !== null && !C.has(cid)) { nt.push('Dropped "' + ti + '": unknown course.'); continue; }
+      let d = v.due == null || v.due === '' ? null : v.due;
+      if (d !== null) { if (!okD(d, '"' + ti + '"')) continue; d = cap(cid, d, '"' + ti + '"'); }
+      out.push({ op, title: ti, course_id: cid, due: d });
+    } else if (op === 'add_quiz') {
+      const cid = Number(v.course_id), ti = String(v.title || '').trim().slice(0, 200);
+      if (!C.has(cid) || !ti) { nt.push('Dropped a quiz with an unknown course or no title.'); continue; }
+      if (!okD(v.date, 'quiz "' + ti + '"')) continue;
+      if (qz.some(q => q.course_id === cid && (q.date === v.date || q.title.toLowerCase() === ti.toLowerCase()))) { nt.push('Skipped quiz "' + ti + '": that quiz already exists.'); continue; }
+      const ids = [...new Set((Array.isArray(v.topic_ids) ? v.topic_ids : []).map(Number))].filter(i => TP.has(i) && TP.get(i).course_id === cid);
+      out.push({ op, course_id: cid, title: ti, date: v.date, topic_ids: ids });
+    } else if (op === 'replan_course') {
+      const c = C.get(Number(v.course_id));
+      if (!c || !c.date) { nt.push('Dropped a replan for a course without an exam date.'); continue; }
+      if (ad(c.date, -1) < td) nt.push('The ' + c.name + ' exam is today or past, so its revision stays on today.');
+      out.push({ op, course_id: c.id });
+    } else if (op === 'add_today') {
+      const ti = String(v.title || '').trim().slice(0, 200);
+      if (!ti) continue;
+      if (ntd >= 3) { nt.push('Today already has 3 priorities, so "' + ti + '" was left out.'); continue; }
+      ntd++;
+      out.push({ op, title: ti });
+    } else nt.push('Dropped an unsupported action.');
+  }
+  return json({ reply: (rp || 'Here is what I suggest.') + (nt.length ? '\n\nNote: ' + nt.join(' ') : ''), actions: out });
+};
+
 const ai = async (p, req, env, db) => {
   const b = (await req.json().catch(() => ({}))) || {};
   try {
+    if (p[2] === 'chat') return await chat(b, env, db);
     if (p[2] === 'breakdown') {
       if (!b || !b.title) return json({ error: 'title' }, 400);
       const v = await ask(

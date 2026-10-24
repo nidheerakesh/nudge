@@ -6,7 +6,7 @@
 
 ---
 
-**Project:** onething
+**Project:** Nudge
 **Generated:** 2026-10-24 15:08:04
 **Category:** Productivity Tool
 **Design Dials:** Motion 3/10 (Subtle) | Density 4/10 (Standard)
@@ -17,26 +17,28 @@
 
 ### Color Palette
 
-| Role | Hex | CSS Variable |
-|------|-----|--------------|
-| Primary | `#0D9488` | `--color-primary` |
-| On Primary | `#000000` | `--color-on-primary` |
-| Secondary | `#14B8A6` | `--color-secondary` |
-| On Secondary | `#0F172A` | `--color-on-secondary` |
-| Accent/CTA | `#EA580C` | `--color-accent` |
-| On Accent/CTA | `#000000` | `--color-on-accent` |
-| Background | `#F0FDFA` | `--color-background` |
-| Foreground | `#134E4A` | `--color-foreground` |
-| Card | `#FFFFFF` | `--color-card` |
-| Card Foreground | `#134E4A` | `--color-card-foreground` |
-| Muted | `#E8F1F4` | `--color-muted` |
-| Muted Foreground | `#475569` | `--color-muted-foreground` |
-| Border | `#99F6E4` | `--color-border` |
-| Destructive | `#DC2626` | `--color-destructive` |
-| On Destructive | `#FFFFFF` | `--color-on-destructive` |
-| Ring | `#0D9488` | `--color-ring` |
+| Role | Light | Dark | CSS Variable |
+|------|-------|------|--------------|
+| Primary | `#7C3AED` | `#C4B5FD` | `--color-primary` |
+| On Primary | `#FFFFFF` | `#1A1025` | `--color-on-primary` |
+| Secondary | `#6D28D9` | `#A78BFA` | `--color-secondary` |
+| On Secondary | `#FFFFFF` | `#1A1025` | `--color-on-secondary` |
+| Accent/CTA | `#BE185D` | `#F472B6` | `--color-accent` |
+| On Accent/CTA | `#FFFFFF` | `#1F0A16` | `--color-on-accent` |
+| Background | `#F7F3FF` | `#1A1025` | `--color-background` |
+| Foreground | `#2E1A47` | `#F1EAFE` | `--color-foreground` |
+| Card | `#FFFFFF` | `#241733` | `--color-card` |
+| Card Foreground | `#2E1A47` | `#F1EAFE` | `--color-card-foreground` |
+| Muted | `#EDE6FB` | `#33224A` | `--color-muted` |
+| Muted Foreground | `#5B4A75` | `#C4B5DD` | `--color-muted-foreground` |
+| Border | `#DDD3F5` | `#3D2A57` | `--color-border` |
+| Destructive | `#B91C1C` | `#F87171` | `--color-destructive` |
+| On Destructive | `#FFFFFF` | `#1A0000` | `--color-on-destructive` |
+| Ring | `#7C3AED` | `#C4B5FD` | `--color-ring` |
+| Highlight (exams, quizzes) | `#FCE7F3` | `#4A1B3A` | `--color-hl` |
+| On Highlight | `#831843` | `#FBCFE8` | `--color-on-hl` |
 
-**Color Notes:** Teal focus + action orange [Accent adjusted from #F97316]
+**Color Notes:** Soft purple focus with a pink accent reserved for the single primary action per screen, and pink highlight for exam and quiz days. Every text and fill pair meets WCAG 4.5:1. Lowest pair is Primary text on Background at 5.22 (light). Secondary was moved from #8B5CF6 to #6D28D9 because white on #8B5CF6 is only 4.2. Dark mode follows `prefers-color-scheme`.
 
 ### Typography
 

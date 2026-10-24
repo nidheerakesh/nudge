@@ -1,5 +1,5 @@
 {
-  "name": "onething",
+  "name": "nudge",
   "private": true,
   "scripts": {
     "dev": "wrangler dev",

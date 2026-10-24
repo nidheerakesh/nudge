@@ -1,4 +1,4 @@
-# onething v2 API contract (shared by backend and frontend)
+# Nudge v2 API contract (shared by backend and frontend)
 
 Existing generic REST stays: GET /api/all, POST/PATCH/DELETE /api/{table}[/{id}], header x-pin.
 GET /api/all returns every table below too.
@@ -31,6 +31,13 @@ Keep schema.sql CREATE statements for old tables unchanged; the migration adds c
 ## AI (Workers AI, wrangler.toml [ai] binding = "AI", model @cf/meta/llama-3.3-70b-instruct-fp8-fast)
 - POST /api/ai/breakdown  body {title}  -> {steps: ["...", ...]}  (3 to 7 tiny steps, each under 10 words, first one takes under 5 minutes)
 - POST /api/ai/plan       body {day}    -> {picks: [{ref_kind, ref_id, title, why}]}  (max 3; server reads open tasks with due dates, open goal steps, open dump items)
+- POST /api/ai/chat       body {messages: [{role: 'user'|'assistant', content}], day} -> {reply, actions: [...]}
+  Server keeps the last 12 messages, loads courses, topics, open tasks, quizzes and today's priorities as context.
+  Actions are proposals only (never applied server side), validated: ids must exist, dates YYYY-MM-DD and not before day.
+  {op:'move_task',id,due} {op:'done_task',id} {op:'add_task',title,course_id|null,due} {op:'delete_task',id}
+  {op:'add_quiz',course_id,title,date,topic_ids:[...]} {op:'replan_course',course_id} {op:'add_today',title}
+  Exam-eve rule: a task with course_id is due no later than exam date - 1 (clamped, or today if that is already past). Dropped or clamped actions are explained in reply.
+  The client applies selected actions via the generic REST routes.
 - On AI failure: 502 {error}. Frontend shows a quiet message, never blocks.
 
 ## Bug fixes in worker
