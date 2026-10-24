@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="100%" role="img" aria-labelledby="t d">
+  <title id="t">Nudge</title>
+  <desc id="d">Nudge: three things for today, small steps for big tasks, and revision planned around your exams.</desc>
+  <rect width="1200" height="300" rx="24" fill="#F7F3FF"/>
+  <rect x="60" y="56" width="1080" height="188" rx="18" fill="#FFFFFF" stroke="#DDD3F5" stroke-width="2"/>
+  <g font-family="'Plus Jakarta Sans', system-ui, sans-serif">
+    <text x="110" y="150" font-size="72" font-weight="700" fill="#2E1A47">Nudge</text>
+    <text x="110" y="200" font-size="26" font-weight="500" fill="#5B4A75">Three things for today. Small steps for big tasks.</text>
+    <text x="110" y="232" font-size="22" font-weight="400" fill="#5B4A75">Revision planned around your exams.</text>
+  </g>
+  <g transform="translate(850 96)">
+    <rect x="0" y="0" width="270" height="34" rx="10" fill="#EDE6FB"/>
+    <rect x="16" y="11" width="12" height="12" rx="3" fill="#7C3AED"/>
+    <rect x="40" y="13" width="170" height="8" rx="4" fill="#7C3AED" opacity="0.5"/>
+    <rect x="0" y="50" width="270" height="34" rx="10" fill="#EDE6FB"/>
+    <rect x="16" y="61" width="12" height="12" rx="3" fill="#7C3AED"/>
+    <rect x="40" y="63" width="120" height="8" rx="4" fill="#7C3AED" opacity="0.5"/>
+    <rect x="0" y="100" width="270" height="34" rx="10" fill="#FCE7F3"/>
+    <path d="M14 117 l6 6 l12 -12" fill="none" stroke="#BE185D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(0 -2)"/>
+    <rect x="40" y="113" width="150" height="8" rx="4" fill="#BE185D" opacity="0.6"/>
+  </g>
+</svg>

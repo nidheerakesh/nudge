@@ -1,5 +1,7 @@
 # Nudge
 
+<img src="assets/readme/hero.svg" alt="Nudge: three things for today, small steps for big tasks, and revision planned around your exams." width="100%">
+
 A life planner for people whose attention comes in bursts. Nudge shows you three things for today, breaks big tasks into small steps, and plans revision around your exams.
 
 Nudge runs on Cloudflare. A Worker serves the app and its API, D1 stores your data, and Workers AI powers the planning helpers. The frontend is one HTML file with no framework and no build step.
