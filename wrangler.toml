@@ -12,3 +12,6 @@ run_worker_first = ["/api/*"]
 binding = "DB"
 database_name = "onething-db"
 database_id = "477dd342-b483-4cfb-b146-aa2174cd9051"
+
+[ai]
+binding = "AI"

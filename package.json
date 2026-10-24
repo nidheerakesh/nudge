@@ -5,6 +5,8 @@
     "dev": "wrangler dev",
     "db:local": "wrangler d1 execute onething-db --local --file=schema.sql",
     "db:remote": "wrangler d1 execute onething-db --remote --file=schema.sql",
+    "db:migrate": "wrangler d1 execute onething-db --remote --file=migrations/001_v2.sql",
+    "db:migrate:local": "wrangler d1 execute onething-db --local --file=migrations/001_v2.sql",
     "deploy": "wrangler deploy"
   },
   "devDependencies": {
