@@ -893,6 +893,22 @@ function vNow(){
   w.append(strip());
   const t=getTm();
   if(t){w.append(focusCard(t));return w;}
+  const td=today(),nm=new Date().getHours()*60+new Date().getMinutes();
+  const ob=S.blocks.filter(b=>b.day===td&&!b.done&&b.kind!=='break').sort((a,b)=>hm2m(a.start)-hm2m(b.start)||a.id-b.id);
+  const lb=ob.filter(b=>hm2m(b.start)+(+b.mins||0)>nm);
+  const pl=lb.length?lb:ob;
+  if(pl.length){
+    const b=pl[skip%pl.length],x={k:'blocks',id:b.id,title:b.title||b.kind,sub:'Planned at '+b.start+', '+(b.mins||0)+' min'};
+    w.append(h('div',{class:'hero'},
+      h('div',{class:'ey'},'Next in your plan'),h('h1',{class:'big'},x.title),h('div',{class:'sub'},x.sub),
+      durRow(),
+      h('div',{class:'row'},
+        h('button',{class:'btn cta lg',onclick:()=>startFocus(x,getDur())},I('play'),'Start focus'),
+        h('button',{class:'btn ghost',onclick:()=>fin('blocks',b.id)},'Mark done'),
+        pl.length>1?h('button',{class:'btn ghost',onclick:()=>{skip++;render();}},'Show another'):null)));
+    w.append(h('div',{class:'mut small center'},pl.length>1?(pl.length-1)+' more planned today.':'This is the last planned item today.'));
+    return w;
+  }
   const c=cands();
   if(!c.length){
     w.append(h('div',{class:'card center'},h('h2',{},'Nothing queued'),
