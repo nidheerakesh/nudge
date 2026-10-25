@@ -1,6 +1,9 @@
 const T = {
   courses: ['name', 'date', 'time', 'kind'],
-  topics: ['course_id', 'title', 'done'],
+  topics: ['course_id', 'title', 'done', 'mins'],
+  days: ['day', 'start', 'end'],
+  blocks: ['day', 'start', 'mins', 'kind', 'title', 'ref_kind', 'ref_id', 'done'],
+  rounds: ['topic_id', 'done'],
   tasks: ['course_id', 'title', 'kind', 'due', 'done', 'area_id'],
   quizzes: ['course_id', 'title', 'date', 'done'],
   qt: ['quiz_id', 'topic_id'],
@@ -257,11 +260,13 @@ export default {
         if (t === 'courses') {
           st.push(db.prepare('DELETE FROM qt WHERE quiz_id IN (SELECT id FROM quizzes WHERE course_id=?)').bind(id));
           st.push(db.prepare('DELETE FROM qt WHERE topic_id IN (SELECT id FROM topics WHERE course_id=?)').bind(id));
+          st.push(db.prepare('DELETE FROM rounds WHERE topic_id IN (SELECT id FROM topics WHERE course_id=?)').bind(id));
           st.push(db.prepare('DELETE FROM topics WHERE course_id=?').bind(id));
           st.push(db.prepare('DELETE FROM tasks WHERE course_id=?').bind(id));
           st.push(db.prepare('DELETE FROM quizzes WHERE course_id=?').bind(id));
         }
         if (t === 'topics') st.push(db.prepare('DELETE FROM qt WHERE topic_id=?').bind(id));
+        if (t === 'topics') st.push(db.prepare('DELETE FROM rounds WHERE topic_id=?').bind(id));
         if (t === 'quizzes') st.push(db.prepare('DELETE FROM qt WHERE quiz_id=?').bind(id));
         if (t === 'habits') st.push(db.prepare('DELETE FROM hlog WHERE habit_id=?').bind(id));
         if (t === 'goals') st.push(db.prepare('DELETE FROM steps WHERE goal_id=?').bind(id));

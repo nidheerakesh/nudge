@@ -188,7 +188,26 @@ body.cw #nav{right:360px}
 .thm{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
 .tb{display:flex;align-items:center;gap:10px;min-height:44px;padding:8px 10px;border:1px solid var(--color-border);border-radius:var(--r);background:var(--color-card);color:var(--color-card-foreground);font:inherit;text-align:left;cursor:pointer}
 .tb.on{border:2px solid var(--color-primary)}
+.boxes{display:inline-flex;align-items:center;gap:6px;margin-right:4px}
+.boxes input{width:20px;height:20px;margin:0}
 .tb i{display:inline-block}
+.tl{display:grid;gap:0;min-width:0}
+.tl-r{display:grid;grid-template-columns:48px minmax(0,1fr);gap:8px;min-height:24px;align-items:start}
+.tl-t{font-size:13px;line-height:24px;color:var(--color-muted-foreground);font-variant-numeric:tabular-nums}
+.tl-c{display:grid;gap:4px;min-width:0;padding:2px 0}
+.bk{display:flex;align-items:center;gap:4px;min-width:0;background:var(--color-card);color:var(--color-card-foreground);border:1px solid var(--color-border);border-left-width:4px;border-radius:var(--r);padding-right:8px;flex-wrap:wrap}
+.bk.focus{border-left-color:var(--color-primary)}
+.bk.break{background:var(--color-muted);border-style:dashed;border-left-width:1px;font-size:14px}
+.bk.fixed{border-left-color:var(--color-muted-foreground)}
+.bk.routine{border-left-color:var(--color-accent)}
+.bk.dn .bk-t{text-decoration:line-through;color:var(--color-muted-foreground)}
+.bk-ck{min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;flex:none}
+.bk-b{flex:1;min-width:0;min-height:44px;border:0;background:transparent;color:inherit;font:inherit;text-align:left;display:flex;flex-direction:column;justify-content:center;padding:4px 0;overflow-wrap:anywhere;cursor:pointer}
+.bk-t{font-weight:600}
+.bk-ed{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding:8px 8px 8px 0}
+.bk-ed label{display:grid;gap:2px;font-size:14px}
+.bk-ed input:not([type=checkbox]){width:132px}
+@media(max-width:380px){.tl-r{grid-template-columns:40px minmax(0,1fr);gap:6px}}
 </style>
 </head>
 <body>
@@ -258,16 +277,16 @@ async function api(m,p,b,re){
   return r.json();
 }
 
-const E={courses:[],topics:[],tasks:[],quizzes:[],qt:[],dump:[],rem:[],habits:[],hlog:[],log:[],areas:[],goals:[],steps:[],today:[],routines:[],rsteps:[],rlog:[],notes:[]};
+const E={courses:[],topics:[],rounds:[],tasks:[],quizzes:[],qt:[],dump:[],rem:[],habits:[],hlog:[],log:[],areas:[],goals:[],steps:[],today:[],routines:[],rsteps:[],rlog:[],notes:[],days:[],blocks:[]};
 let S=Object.assign({},E);
-const VW=['today','inbox','goals','now','plan','exams','tasks','quiz','rem','hab','rout','areas','log'];
+const VW=['today','inbox','goals','now','plan','day','exams','tasks','quiz','rem','hab','rout','areas','log'];
 const hk=()=>{const k=location.hash.slice(1);return VW.includes(k)?k:null;};
 let tab=hk()||localStorage.getItem('tab')||'today';
 let mode=localStorage.getItem('mode')||'exam';
 let skip=0;
 const openQ=new Set();
-const TOP=[['today','Today','sun',['today']],['inbox','Inbox','inbox',['inbox']],['goals','Goals','flag',['goals']],['study','Study','book',['now','plan','exams','tasks','quiz']],['more','More','menu',['rout','hab','rem','areas','log']]];
-const NM={now:'Focus',plan:'Plan',exams:'Exams',tasks:'Tasks',quiz:'Quizzes',rout:'Routines',hab:'Habits',rem:'Reminders',areas:'Areas and notes',log:'Log'};
+const TOP=[['today','Today','sun',['today']],['inbox','Inbox','inbox',['inbox']],['goals','Goals','flag',['goals']],['study','Study','book',['now','plan','day','exams','tasks','quiz']],['more','More','menu',['rout','hab','rem','areas','log']]];
+const NM={now:'Focus',plan:'Plan',day:'Day',exams:'Exams',tasks:'Tasks',quiz:'Quizzes',rout:'Routines',hab:'Habits',rem:'Reminders',areas:'Areas and notes',log:'Log'};
 let pk=null,pmsg='',bmsg={},gsel=null;
 
 const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -362,6 +381,7 @@ function fin(k,id,on=1){
   const o=S[k].find(x=>x.id===id);if(!o)return;
   o.done=on;
   if(k==='quizzes'&&on)S.qt.filter(r=>r.quiz_id===id).forEach(r=>{const t=S.topics.find(x=>x.id===r.topic_id);if(t)t.done=1;});
+  if(k==='quizzes'&&!on)S.qt.filter(r=>r.quiz_id===id).forEach(r=>{const t=S.topics.find(x=>x.id===r.topic_id);if(t&&t.done){t.done=0;api('PATCH','topics/'+t.id,{done:0});}});
   if(on){
     addLog(k,o.title||o.text,0);
     const n=S.log.filter(l=>l.day===today()&&l.kind!=='focus').length;
@@ -483,7 +503,8 @@ function cands(){
     up.forEach(c=>{const t=und(c)[0];if(t)L.push({due:c.date,o:{k:'topics',id:t.id,title:t.title,sub:sub(c)}});});
     L.sort((a,b)=>a.due>b.due?1:a.due<b.due?-1:0).forEach(x=>put(x.o));
   }
-  return out;
+  const td=today();
+  return out.filter(o=>o.k==='tasks'?S.tasks.some(x=>x.id===o.id&&!x.done&&x.due&&x.due<=td):o.k==='quizzes'&&S.quizzes.some(q=>q.id===o.id&&!q.done&&q.date&&q.date<=td));
 }
 
 const grp=k=>(TOP.find(g=>g[3].includes(k))||TOP[0]);
@@ -518,7 +539,7 @@ function render(bg){
     if(e===ae){fk=k;try{ss=e.selectionStart;se=e.selectionEnd;}catch(x){}}
     if(bg&&(e.tagName==='TEXTAREA'||e.tagName==='INPUT'&&!/^(checkbox|radio)$/.test(e.type))&&e.value&&e.value!==(e._v||''))vs[k]=e.value;
   });
-  const v={today:vToday,inbox:vInbox,goals:vGoals,now:vNow,plan:vPlan,exams:vExams,tasks:vTasks,quiz:vQuiz,rem:vRem,hab:vHab,rout:vRout,areas:vAreas,log:vLog}[tab]||vToday;
+  const v={today:vToday,inbox:vInbox,goals:vGoals,now:vNow,plan:vPlan,day:vDay,exams:vExams,tasks:vTasks,quiz:vQuiz,rem:vRem,hab:vHab,rout:vRout,areas:vAreas,log:vLog}[tab]||vToday;
   const el=v(),sn=subnav();
   if(sn)el.prepend(sn);
   ap.replaceChildren(el);
@@ -615,7 +636,9 @@ function vToday(){
   const w=h('div',{class:'wrap'});
   remBan(w);
   const t=getTm(),xs=tdy(),op=xs.filter(x=>!x.done);
+  const morn=!xs.length&&new Date().getHours()<12;
   if(t)w.append(focusCard(t));
+  if(morn)w.append(h('div',{class:'card'},h('h2',{},'Pick your top 3 for today'),h('div',{class:'mut small',style:'margin:4px 0 0'},'Three is the limit. Pick the ones that matter most.'),quick('Add a priority',v=>addToday({title:v}))));
   const c=h('div',{class:'card'},
     h('div',{class:'row sb'},h('div',{},h('div',{class:'ey'},'Today'),h('h2',{},op.length?'Up to 3 things. That is enough.':xs.length?'All done for today.':'Pick up to 3 things')),
       h('button',{class:'btn s',onclick:plan},I('spark'),'Plan my day')),
@@ -623,7 +646,7 @@ function vToday(){
       h('label',{},h('input',{type:'checkbox',checked:!!x.done,onchange:e=>tdone(x,e.target.checked)}),x.title),
       x.done?null:h('button',{class:'btn s',onclick:()=>startFocus({k:'today',id:x.id,title:x.title,sub:'Today priority'},getDur())},I('play'),'Start'),
       h('button',{class:'x','aria-label':'Remove from today',onclick:()=>del('today',x.id,x.title||'item')},I('x'))))),
-    xs.length<3?quick('Add a priority',v=>addToday({title:v})):null,
+    xs.length<3&&!morn?quick('Add a priority',v=>addToday({title:v})):null,
     pmsg?h('div',{class:'qm',role:'status'},pmsg):null,
     pk&&pk.length?h('div',{},h('h3',{style:'margin-top:12px'},'Suggestions'),h('ul',{class:'list'},pk.map(p=>h('li',{},
       h('div',{class:'lt'},h('div',{},h('div',{},p.title),p.why?h('div',{class:'mut small'},p.why):null)),
@@ -920,8 +943,11 @@ function examCard(c){
       h('div',{style:'min-width:0'},h('h2',{},c.name),h('div',{class:'mut small'},(c.kind==='oa'?'Online assessment':'Exam')+(c.date?', '+fd(c.date)+(c.time?' at '+c.time:''):', no date yet'))),
       h('div',{class:'cdw'},c.date?cd(c):'')),
     h('div',{class:'bar'},h('i',{style:'width:'+(b?100*a/b:0)+'%'})),
-    h('div',{class:'mut small'},b?a+' of '+b+' topics covered':'No topics yet'),
+    h('div',{class:'row sb'},h('div',{class:'mut small'},b?a+' of '+b+' topics covered':'No topics yet'),
+      h('button',{class:'btn s',disabled:!ts.length,onclick:async()=>{if(!ts.length)return;await api('POST','rounds',ts.map(t=>({topic_id:t.id,done:0})));await load();render();}},'+ Add round')),
     h('ul',{class:'list'},ts.map(t=>h('li',{class:t.done?'dn':''},
+      h('span',{class:'boxes'},S.rounds.filter(r=>r.topic_id===t.id).map((r,i)=>h('input',{type:'checkbox',checked:!!r.done,'aria-label':'Round '+(i+1)+' of '+t.title,onchange:e=>upd('rounds',r.id,{done:e.target.checked?1:0})})),
+        ),
       h('label',{},h('input',{type:'checkbox',checked:!!t.done,onchange:e=>topicTog(t,e.target.checked)}),t.title),
       h('button',{class:'x',title:'Remove topic','aria-label':'Remove topic',onclick:()=>del('topics',t.id,t.title||'item')},I('x'))))),
     h('details',{},h('summary',{},'Add topics'),bulk(c)),
@@ -975,8 +1001,9 @@ function vTasks(){
 
 async function cover(q,t,on){
   if(on){
+    t.done=1;
     await api('POST','qt',{quiz_id:q.id,topic_id:t.id});
-    if(q.done)await api('PATCH','topics/'+t.id,{done:1});
+    await api('PATCH','topics/'+t.id,{done:1});
   }else{
     const r=S.qt.find(r=>r.quiz_id===q.id&&r.topic_id===t.id);
     if(r)await api('DELETE','qt/'+r.id);
@@ -1110,6 +1137,7 @@ function vPlan(){
   w.append(h('div',{class:'card'},h('h2',{},'Plan'),h('p',{class:'mut small',style:'margin:4px 0 12px'},'Every day until your last exam. Move a task if a day gets heavy.'),
     qs.length||cs.length?h('div',{class:'form'},rs,h('button',{class:'btn fill',onclick:()=>go1(rs.value)},'Preview replan')):null,
     h('details',{},h('summary',{},'New quiz with topics'),S.courses.length?qForm():h('p',{class:'mut small'},'Add an exam first.'))));
+  w.append(weekCard());
   const rc=rpCard();if(rc)w.append(rc);
   const od=S.tasks.filter(t=>!t.done&&t.due&&t.due<td).sort((a,b)=>a.due>b.due?1:-1);
   if(od.length)w.append(h('div',{class:'card'},h('h3',{},'Overdue'),h('span',{class:'tag bad'},od.length+' open'),h('ul',{class:'list'},od.map(planRow))));
@@ -1129,6 +1157,188 @@ function vPlan(){
         !q.done?h('button',{class:'btn s',onclick:()=>go1('q:'+q.id)},'Replan'):null)),
       ts.length?h('ul',{class:'list'},ts.map(planRow)):null));
   }
+  return w;
+}
+
+function weekCard(){
+  const s=wk(),e=addD(s,6),nx=addD(s,7);
+  const dn=S.log.filter(l=>l.day>=s&&l.day<=e&&l.kind!=='focus').length;
+  const op=S.tasks.filter(t=>!t.done&&t.due&&t.due>=s&&t.due<=e);
+  return h('details',{class:'card'},h('summary',{style:'margin-top:0;font-weight:700'},'This week'),
+    h('div',{class:'stats',style:'margin-top:8px'},h('span',{class:'stat'},h('b',{},dn),' done'),h('span',{class:'stat'},h('b',{},op.length),' open tasks due this week')),
+    op.length?h('div',{class:'row t'},h('button',{class:'btn s',onclick:()=>moveWk(op,nx)},'Move open items to next week')):h('p',{class:'mut small'},'No open tasks due this week.'),
+    h('div',{class:'qm'},'Quizzes are not moved. Tasks move to the Monday after this one, and an exam still caps them.'));
+}
+function moveWk(xs,nx){
+  if(!confirm('Move '+xs.length+(xs.length===1?' open task':' open tasks')+' due this week to '+fd(nx)+'?'))return;
+  xs.forEach(t=>upd('tasks',t.id,{due:cap(t.course_id,nx)}));
+  toast('Moved '+xs.length+(xs.length===1?' task':' tasks')+' to next week.');
+}
+
+let dsel=today(),dpl=null,bkEd=null;
+const RMIN=15,FOCUS=45,BRK=10;
+const hm2m=s=>{const[a,b]=String(s||'0:0').split(':').map(Number);return a*60+b;};
+const m2hm=m=>pad(Math.floor(m/60))+':'+pad(m%60);
+function dwin(d){const x=S.days.find(y=>y.day===d);return{start:(x&&x.start)||'07:00',end:(x&&x.end)||'23:00'};}
+function freeMin(d){
+  const w=dwin(d);
+  return hm2m(w.end)-hm2m(w.start)-S.blocks.filter(b=>b.day===d&&b.kind==='fixed').reduce((a,b)=>a+(+b.mins||0),0);
+}
+function frees(d){
+  const w=dwin(d);
+  let segs=[[hm2m(w.start),hm2m(w.end)]];
+  S.blocks.filter(b=>b.day===d&&b.kind==='fixed').forEach(b=>{
+    const s=hm2m(b.start),e=s+(+b.mins||0),out=[];
+    segs.forEach(([a,z])=>{
+      if(e<=a||s>=z){out.push([a,z]);return;}
+      if(s>a)out.push([a,s]);
+      if(e<z)out.push([e,z]);
+    });
+    segs=out;
+  });
+  return segs.filter(([a,z])=>z>a);
+}
+function fill(d,td){
+  td=td||today();
+  const out=[],skip=[],segs=frees(d);
+  const first=(len,from)=>{for(const[a,z]of segs){const x=Math.ceil(Math.max(a,from||0)/RMIN)*RMIN;if(x+len<=z)return x;}return null;};
+  const take=(x,len)=>{
+    for(let i=0;i<segs.length;i++){
+      const[a,z]=segs[i];
+      if(a<=x&&x+len<=z){segs.splice(i,1,...[[a,x],[x+len,z]].filter(([p,q])=>q>p));return;}
+    }
+  };
+  const put=b=>out.push(Object.assign({day:d,done:0},b));
+  const tk=t=>({title:t.title,mins:FOCUS,ref_kind:'task',ref_id:t.id});
+  const qk=q=>({title:'Quiz: '+q.title,mins:FOCUS,ref_kind:'quiz',ref_id:q.id});
+  const rev=t=>{
+    const tp=S.topics.find(x=>x.title===t.title.slice(8).trim()&&x.course_id===t.course_id);
+    if(!tp)return[tk(t)];
+    const xs=[];let r=+tp.mins||FOCUS;
+    while(r>0){const c=Math.min(FOCUS,r);xs.push({title:t.title+(xs.length?' (part '+(xs.length+1)+')':''),mins:c,ref_kind:'topic',ref_id:tp.id});r-=c;}
+    return xs;
+  };
+  [...S.routines].sort((a,b)=>((a.part==='pm')-(b.part==='pm'))||a.id-b.id).forEach(r=>{
+    const x=first(RMIN,r.part==='pm'?19*60:7*60);
+    if(x==null){skip.push({title:r.name,mins:RMIN});return;}
+    take(x,RMIN);
+    put({start:m2hm(x),mins:RMIN,kind:'routine',title:r.name,ref_kind:'routine',ref_id:r.id});
+  });
+  const opn=S.tasks.filter(t=>!t.done),qz=S.quizzes.filter(q=>!q.done&&q.date);
+  const byD=(a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0;
+  const g1=[...opn.filter(t=>t.due&&t.due<td).map(t=>[t.due,tk(t)]),...qz.filter(q=>q.date<td).map(q=>[q.date,qk(q)])].sort(byD).map(x=>x[1]);
+  const g2=[...opn.filter(t=>t.due===td&&!t.title.startsWith('Revise: ')).map(tk),...qz.filter(q=>q.date===td).map(qk)];
+  const g3=opn.filter(t=>t.due===td&&t.title.startsWith('Revise: ')).flatMap(rev);
+  [...g1,...g2,...g3].forEach(it=>{
+    const x=first(it.mins);
+    if(x==null){skip.push({title:it.title,mins:it.mins});return;}
+    take(x,it.mins);
+    put({start:m2hm(x),mins:it.mins,kind:'focus',title:it.title,ref_kind:it.ref_kind,ref_id:it.ref_id});
+    if(segs.some(([a,z])=>a<=x+it.mins&&x+it.mins+BRK<=z)){
+      take(x+it.mins,BRK);
+      put({start:m2hm(x+it.mins),mins:BRK,kind:'break',title:'Break',ref_kind:null,ref_id:null});
+    }
+  });
+  out.sort((a,b)=>hm2m(a.start)-hm2m(b.start));
+  return{blocks:out,skip,free:freeMin(d)};
+}
+async function saveWin(d,s,e){
+  if(!s||!e||e<=s){toast('The day must end after it starts.');return;}
+  const x=S.days.find(y=>y.day===d);
+  try{
+    if(x)await api('PATCH','days/'+x.id,{start:s,end:e});
+    else await api('POST','days',{day:d,start:s,end:e});
+    await load();
+  }catch(err){fail(err);}
+  dpl=null;render();
+  toast('Day window saved.');
+}
+async function applyDp(){
+  const p=dpl;
+  try{
+    await Promise.all(S.blocks.filter(b=>b.day===p.day&&b.kind!=='fixed').map(b=>api('DELETE','blocks/'+b.id)));
+    if(p.r.blocks.length)await api('POST','blocks',p.r.blocks);
+    await load();
+    dpl=null;
+    toast(p.r.blocks.length+(p.r.blocks.length===1?' block':' blocks')+' planned.');
+  }catch(err){fail(err);}
+  render();
+}
+function dpCard(d){
+  const p=dpl;
+  if(!p||p.day!==d)return null;
+  return h('div',{class:'card now'},h('h3',{},'Proposed plan'),
+    h('p',{class:'mut small'},'Apply replaces this day\'s focus, break and routine blocks. Fixed blocks stay.'),
+    p.r.blocks.length?h('ul',{class:'list'},p.r.blocks.map(b=>h('li',{},h('div',{class:'lt'},b.start+', '+b.mins+' min, '+b.title)))):h('p',{class:'mut small'},'Nothing to schedule.'),
+    p.r.skip.length?h('div',{},h('h3',{style:'margin-top:12px'},'Not scheduled'),h('ul',{class:'list'},p.r.skip.map(x=>h('li',{},h('div',{class:'lt'},x.title+', '+x.mins+' min'))))):null,
+    h('div',{class:'row'},h('button',{class:'btn cta',onclick:applyDp},'Apply plan'),h('button',{class:'btn ghost',onclick:()=>{dpl=null;render();}},'Discard')));
+}
+function bkEdit(b){
+  const st=h('input',{type:'time',value:b.start,'aria-label':'Start time'}),ln=h('input',{type:'number',min:5,max:600,step:5,value:b.mins,'aria-label':'Length in minutes'});
+  return h('div',{class:'bk-ed'},
+    h('label',{},'Start',st),h('label',{},'Minutes',ln),
+    h('button',{class:'btn s fill',onclick:()=>{
+      const s=st.value,m=+ln.value;bkEd=null;
+      if(!s||!(m>0)){toast('Pick a start time and a length.');render();return;}
+      upd('blocks',b.id,{start:s,mins:m});
+    }},'Save'),
+    h('button',{class:'btn s ghost',onclick:()=>{bkEd=null;render();}},'Cancel'),
+    h('button',{class:'btn s ghost',onclick:()=>{bkEd=null;del('blocks',b.id,b.title||b.kind);}},'Delete'));
+}
+function bkCard(b){
+  if(bkEd===b.id)return h('div',{class:'bk '+b.kind},bkEdit(b));
+  const sp=Math.max(1,Math.ceil((+b.mins||RMIN)/RMIN));
+  return h('div',{class:'bk '+b.kind+(b.done?' dn':''),style:'min-height:'+Math.max(44,sp*24)+'px'},
+    h('label',{class:'bk-ck'},h('input',{type:'checkbox',checked:!!b.done,'aria-label':'Done: '+(b.title||b.kind),onchange:e=>upd('blocks',b.id,{done:e.target.checked?1:0})})),
+    h('button',{class:'bk-b',onclick:()=>{bkEd=b.id;render();}},
+      h('span',{class:'bk-t'},b.title||b.kind),
+      h('span',{class:'mut small'},b.start+', '+(b.mins||0)+' min')));
+}
+function tl(d){
+  const w=dwin(d),s=hm2m(w.start),e=hm2m(w.end);
+  const bs=S.blocks.filter(b=>b.day===d).map(b=>({b,st:hm2m(b.start)})).sort((a,b)=>a.st-b.st||a.b.id-b.b.id);
+  const rows=[];let t=s,i=0;
+  while(t<e){
+    const here=[];
+    while(i<bs.length&&bs[i].st<t+RMIN)here.push(bs[i++].b);
+    if(here.length){
+      rows.push(h('div',{class:'tl-r'},h('div',{class:'tl-t'},m2hm(t)),h('div',{class:'tl-c'},here.map(bkCard))));
+      t+=Math.max(1,...here.map(b=>Math.ceil((+b.mins||RMIN)/RMIN)))*RMIN;
+    }else{
+      rows.push(h('div',{class:'tl-r'},h('div',{class:'tl-t'},m2hm(t)),h('div',{})));
+      t+=RMIN;
+    }
+  }
+  if(i<bs.length)rows.push(h('div',{class:'tl-r'},h('div',{class:'tl-t'},'after'),h('div',{class:'tl-c'},bs.slice(i).map(x=>bkCard(x.b)))));
+  return h('div',{class:'tl'},rows);
+}
+function vDay(){
+  const w=h('div',{class:'wrap'}),td=today(),d=dsel,win=dwin(d),ft=freeMin(d);
+  w.append(h('div',{class:'card'},
+    h('div',{class:'row sb'},
+      h('div',{},h('div',{class:'ey'},'Day'),h('h2',{},new Date(d+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short'})),d===td?h('span',{class:'tag td',style:'margin-top:6px'},'Today'):null),
+      h('div',{class:'row t',style:'margin:0'},
+        h('button',{class:'x','aria-label':'Previous day',onclick:()=>{dsel=addD(d,-1);dpl=null;bkEd=null;render();}},I('cl')),
+        h('button',{class:'x','aria-label':'Next day',onclick:()=>{dsel=addD(d,1);dpl=null;bkEd=null;render();}},I('cr')),
+        d!==td?h('button',{class:'btn s',onclick:()=>{dsel=td;dpl=null;bkEd=null;render();}},'Today'):null))));
+  const st=h('input',{type:'time',value:win.start,'aria-label':'Day starts'}),en=h('input',{type:'time',value:win.end,'aria-label':'Day ends'});
+  w.append(h('div',{class:'card'},h('h3',{},'Day window'),
+    h('div',{class:'form'},h('label',{class:'small mut'},'Start ',st),h('label',{class:'small mut'},'End ',en),
+      h('button',{class:'btn s fill',onclick:()=>saveWin(d,st.value,en.value)},'Save window')),
+    ft<0?h('p',{class:'ev',role:'status'},'Overloaded: fixed blocks are '+(-ft)+' min longer than this window. Shorten them or widen the window.')
+      :h('p',{class:'mut small'},ft+' min free after fixed blocks.')));
+  const ti=h('input',{class:'grow',placeholder:'Meal, class, gym…','aria-label':'Fixed block title'}),fs=h('input',{type:'time',value:'13:00','aria-label':'Fixed block start'}),fm=h('input',{type:'number',min:5,max:600,step:5,value:30,class:'num','aria-label':'Fixed block minutes'});
+  w.append(h('div',{class:'card'},h('h3',{},'Add fixed block'),h('p',{class:'mut small'},'Meals, sleep, classes. Planned blocks fit around these.'),
+    h('div',{class:'form'},ti,fs,fm,h('span',{class:'small mut'},'min'),
+      h('button',{class:'btn fill',onclick:()=>{
+        const t=ti.value.trim(),m=+fm.value;
+        if(!t||!fs.value||!(m>0)){toast('Add a title, a start time and minutes.');return;}
+        dpl=null;add('blocks',{day:d,start:fs.value,mins:m,kind:'fixed',title:t,done:0});
+      }},'Add fixed block'))));
+  w.append(h('div',{class:'card'},h('div',{class:'row sb'},h('div',{},h('h3',{},'Plan the day'),h('div',{class:'mut small'},'Fills free time with focus blocks, breaks and routines. Nothing is saved until you apply.')),
+    h('button',{class:'btn s fill',onclick:()=>{dpl={day:d,r:fill(d,td)};render();}},I('spark'),'Propose plan'))));
+  const pc=dpCard(d);if(pc)w.append(pc);
+  w.append(h('div',{class:'card'},h('h3',{},'Timeline'),tl(d)));
   return w;
 }
 
