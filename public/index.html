@@ -202,6 +202,8 @@ body.cw #nav{right:360px}
 .bk.routine{border-left-color:var(--color-accent)}
 .bk.dn .bk-t{text-decoration:line-through;color:var(--color-muted-foreground)}
 .bk-ck{min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;flex:none}
+.bk-g{min-width:44px;min-height:44px;border:0;background:transparent;color:inherit;touch-action:none;cursor:grab;display:grid;place-items:center;flex:none}
+.bk-ghost{border-radius:12px;box-shadow:var(--shadow-md)}
 .bk-b{flex:1;min-width:0;min-height:44px;border:0;background:transparent;color:inherit;font:inherit;text-align:left;display:flex;flex-direction:column;justify-content:center;padding:4px 0;overflow-wrap:anywhere;cursor:pointer}
 .bk-t{font-weight:600}
 .bk-ed{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding:8px 8px 8px 0}
@@ -626,7 +628,7 @@ function routCard(r,full){
   const n=ss.filter(s=>S.rlog.some(l=>l.rstep_id===s.id&&l.day===d)).length;
   return h('div',{class:'card'},
     h('div',{class:'row sb'},h('div',{},h('h3',{},r.name),h('div',{class:'mut small'},(r.part==='pm'?'Evening':'Morning')+', '+n+' of '+ss.length+' today')),
-      full?h('button',{class:'x','aria-label':'Remove routine',onclick:()=>{if(confirm('Remove '+r.name+'?'))del('routines',r.id);}},I('x')):null),
+      full?h('button',{class:'x','aria-label':'Remove routine',onclick:()=>del('routines',r.id,r.name||'routine')},I('x')):null),
     h('ul',{class:'list'},ss.map(s=>{const on=S.rlog.some(l=>l.rstep_id===s.id&&l.day===d);return h('li',{class:on?'dn':''},
       h('label',{},h('input',{type:'checkbox',checked:on,onchange:()=>rtog(s,d)}),s.title),
       full?h('button',{class:'x','aria-label':'Remove step',onclick:()=>del('rsteps',s.id,s.title||'step')},I('x')):null);})),
@@ -657,6 +659,10 @@ function vToday(){
     w.append(h('button',{class:'btn cta lg wide',onclick:()=>just5(f?{k:'today',id:f.id,title:f.title,sub:'Just 5 minutes'}:{title:'Just 5 minutes',sub:'Any small thing'})},I('play'),'Just start 5 min'));
   }
   const gs=S.goals.filter(g=>!g.done);
+  const pl=S.blocks.filter(b=>b.day===today()).sort((a,b)=>hm2m(a.start)-hm2m(b.start)||a.id-b.id);
+  w.append(h('div',{class:'card'},h('div',{class:'row sb'},h('h3',{},"Today's plan"),h('button',{class:'btn s',onclick:()=>{dsel=today();go('day');}},'Open day planner')),
+    pl.length?h('ul',{class:'list'},pl.map(b=>h('li',{class:b.done?'dn':''},h('label',{},h('input',{type:'checkbox',checked:!!b.done,onchange:e=>upd('blocks',b.id,{done:e.target.checked?1:0})}),h('span',{class:'mut small'},b.start+'  '),b.title||b.kind))))
+      :h('p',{class:'mut small'},'No plan for today yet. Open the day planner to plan it.')));
   if(gs.length)w.append(h('div',{class:'card'},h('h3',{},'Next step on each goal'),
     h('ul',{class:'list'},gs.map(g=>{const s=nstep(g);return h('li',{},
       s?h('label',{},h('input',{type:'checkbox',onchange:e=>fin('steps',s.id,e.target.checked?1:0)}),h('span',{},s.title,h('span',{class:'mut small'},'  ('+g.title+')')))
@@ -721,7 +727,7 @@ function goalCard(g){
   return h('div',{class:'card'+(g.done?' past':'')},
     h('div',{class:'row sb'},
       h('label',{style:'display:flex;gap:8px;align-items:center;min-height:44px;font-weight:700;flex:1;min-width:0;overflow-wrap:anywhere'},h('input',{type:'checkbox',checked:!!g.done,onchange:e=>fin('goals',g.id,e.target.checked?1:0)}),g.title),
-      h('button',{class:'x','aria-label':'Remove goal',onclick:()=>{if(confirm('Remove '+g.title+' and its steps?'))del('goals',g.id);}},I('x'))),
+      h('button',{class:'x','aria-label':'Remove goal',onclick:()=>del('goals',g.id,g.title||'goal')},I('x'))),
     g.why?h('div',{class:'mut small'},g.why):null,
     ss.length?h('div',{class:'mut small'},dn+' of '+ss.length+' steps'):null,
     h('ul',{class:'list'},ss.map(s=>h('li',{class:s.done?'dn':''},
@@ -797,7 +803,7 @@ function vAreas(){
   const w=h('div',{class:'wrap'});
   w.append(h('div',{class:'card'},h('h2',{},'Areas'),
     h('ul',{class:'list'},[...S.areas].sort(bys).map(a=>h('li',{},h('div',{class:'lt'},a.name),
-      h('button',{class:'x','aria-label':'Remove area '+a.name,onclick:()=>{if(confirm('Remove area '+a.name+'? Items keep existing.'))del('areas',a.id);}},I('x'))))),
+      h('button',{class:'x','aria-label':'Remove area '+a.name,onclick:()=>del('areas',a.id,a.name||'area')},I('x'))))),
     quick('New area',v=>add('areas',{name:v,sort:S.areas.length}))));
   w.append(vLook());
   const as=asel(null);
@@ -955,7 +961,7 @@ function examCard(c){
       h('input',{type:'date','aria-label':'Exam date',value:c.date||'',onchange:e=>upd('courses',c.id,{date:e.target.value||null})}),
       h('input',{type:'time','aria-label':'Exam time',value:c.time||'',onchange:e=>upd('courses',c.id,{time:e.target.value||null})}),
       h('span',{class:'sp'}),
-      h('button',{class:'btn s ghost',onclick:()=>{if(confirm('Delete '+c.name+' and everything under it?'))del('courses',c.id);}},'Delete')));
+      h('button',{class:'btn s ghost',onclick:()=>del('courses',c.id,c.name||'course')},'Delete')));
 }
 function vExams(){
   const w=h('div',{class:'wrap'});
@@ -1038,7 +1044,7 @@ function vQuiz(){
 }
 
 function qForm(){
-  const ti=h('input',{class:'grow',placeholder:'Quiz name','aria-label':'Quiz name'});
+  const ti=h('input',{class:'grow',placeholder:'Quiz name, for example Quiz 2…','aria-label':'Quiz name'});
   const cs=csel(false),du=h('input',{type:'date','aria-label':'Quiz date'});
   const sel=new Set(),tb=h('div',{});
   const cts=()=>S.topics.filter(t=>t.course_id===+cs.value).sort((a,b)=>a.id-b.id);
@@ -1186,7 +1192,8 @@ function freeMin(d){
 }
 function frees(d){
   const w=dwin(d);
-  let segs=[[hm2m(w.start),hm2m(w.end)]];
+  const now=new Date(),nm=Math.ceil((now.getHours()*60+now.getMinutes())/RMIN)*RMIN;
+  let segs=[[d===today()?Math.max(hm2m(w.start),nm):hm2m(w.start),hm2m(w.end)]];
   S.blocks.filter(b=>b.day===d&&b.kind==='fixed').forEach(b=>{
     const s=hm2m(b.start),e=s+(+b.mins||0),out=[];
     segs.forEach(([a,z])=>{
@@ -1289,10 +1296,55 @@ function bkCard(b){
   if(bkEd===b.id)return h('div',{class:'bk '+b.kind},bkEdit(b));
   const sp=Math.max(1,Math.ceil((+b.mins||RMIN)/RMIN));
   return h('div',{class:'bk '+b.kind+(b.done?' dn':''),style:'min-height:'+Math.max(44,sp*24)+'px'},
+    h('button',{class:'bk-g','aria-label':'Drag to move '+(b.title||b.kind)+'. Alt plus arrow keys moves it 15 minutes',onpointerdown:e=>dragStart(e,b),onkeydown:e=>{if(e.altKey&&(e.key==='ArrowUp'||e.key==='ArrowDown')){e.preventDefault();nudgeBk(b,e.key==='ArrowUp'?-RMIN:RMIN);}}},I('menu')),
     h('label',{class:'bk-ck'},h('input',{type:'checkbox',checked:!!b.done,'aria-label':'Done: '+(b.title||b.kind),onchange:e=>upd('blocks',b.id,{done:e.target.checked?1:0})})),
     h('button',{class:'bk-b',onclick:()=>{bkEd=b.id;render();}},
       h('span',{class:'bk-t'},b.title||b.kind),
       h('span',{class:'mut small'},b.start+', '+(b.mins||0)+' min')));
+}
+let drag=null;
+function dragStart(e,b){
+  e.preventDefault();
+  if(drag)drag.g.remove();
+  const card=e.currentTarget.closest('.bk'),r=card.getBoundingClientRect(),g=card.cloneNode(true);
+  g.classList.add('bk-ghost');g.style.cssText='position:fixed;left:'+r.left+'px;top:'+r.top+'px;width:'+r.width+'px;pointer-events:none;z-index:50;opacity:.9';
+  document.body.append(g);card.style.opacity='.35';
+  drag={id:b.id,ox:e.clientX-r.left,oy:e.clientY-r.top,g,card};
+}
+window.addEventListener('pointermove',e=>{if(drag){drag.g.style.left=(e.clientX-drag.ox)+'px';drag.g.style.top=(e.clientY-drag.oy)+'px';}});
+function dragEnd(e){
+  if(!drag)return;
+  const dg=drag;drag=null;dg.g.remove();dg.card.style.opacity='';
+  if(e.type==='pointercancel')return;
+  const row=document.elementFromPoint(e.clientX,e.clientY)?.closest('.tl-r');
+  const lbl=row&&row.querySelector('.tl-t')?.textContent.trim();
+  const b=S.blocks.find(x=>x.id===dg.id);
+  if(b&&lbl&&/^\d\d:\d\d$/.test(lbl)&&lbl!==b.start)upd('blocks',b.id,{start:lbl});
+}
+window.addEventListener('pointerup',dragEnd);
+window.addEventListener('pointercancel',dragEnd);
+function nudgeBk(b,dm){
+  const w=dwin(b.day),ns=hm2m(b.start)+dm;
+  if(ns<hm2m(w.start)||ns+(+b.mins||0)>hm2m(w.end)){toast('That move goes outside the day.');return;}
+  const lab=(b.title||b.kind);upd('blocks',b.id,{start:m2hm(ns)});
+  setTimeout(()=>{const g=[...document.querySelectorAll('.bk-g')].find(x=>x.getAttribute('aria-label').startsWith('Drag to move '+lab+'.'));g&&g.focus();},0);
+}
+function nowRound(){const n=new Date();return Math.ceil((n.getHours()*60+n.getMinutes())/RMIN)*RMIN;}
+function shiftRest(d,n){
+  const w=dwin(d),e=hm2m(w.end),from=d===today()?Math.max(nowRound(),hm2m(w.start)):hm2m(w.start);
+  const mv=S.blocks.filter(b=>b.day===d&&b.kind!=='fixed'&&!b.done&&hm2m(b.start)>=from).map(b=>({b,ns:hm2m(b.start)+n}));
+  if(!mv.length){toast('Nothing left to move.');return;}
+  if(mv.some(x=>x.ns<hm2m(w.start)||x.ns+(+x.b.mins||0)>e)){toast('That shift goes past the day. Try a smaller shift or a longer day.',{err:1});return;}
+  mv.forEach(x=>upd('blocks',x.b.id,{start:m2hm(x.ns)}));
+  toast('Moved '+mv.length+' block'+(mv.length===1?'':'s')+' by '+(n>0?'+':'')+n+' min.');
+}
+function shiftCard(d){
+  const ni=h('input',{type:'number',min:5,max:240,step:5,value:30,style:'width:90px'});
+  const by=k=>{const n=(+ni.value||0)*k;if(n)shiftRest(d,n);};
+  return h('div',{class:'card'},h('h3',{},'Shift the rest of the day'),
+    h('p',{class:'mut small'},'Moves unfinished blocks from now on. Fixed blocks stay put.'),
+    h('div',{class:'form'},h('label',{class:'small mut'},'Shift by ',ni,' min'),
+      h('button',{class:'btn s',onclick:()=>by(-1)},'Earlier'),h('button',{class:'btn s fill',onclick:()=>by(1)},'Later')));
 }
 function tl(d){
   const w=dwin(d),s=hm2m(w.start),e=hm2m(w.end);
@@ -1338,6 +1390,7 @@ function vDay(){
   w.append(h('div',{class:'card'},h('div',{class:'row sb'},h('div',{},h('h3',{},'Plan the day'),h('div',{class:'mut small'},'Fills free time with focus blocks, breaks and routines. Nothing is saved until you apply.')),
     h('button',{class:'btn s fill',onclick:()=>{dpl={day:d,r:fill(d,td)};render();}},I('spark'),'Propose plan'))));
   const pc=dpCard(d);if(pc)w.append(pc);
+  w.append(shiftCard(d));
   w.append(h('div',{class:'card'},h('h3',{},'Timeline'),tl(d)));
   return w;
 }
@@ -1393,7 +1446,7 @@ function vHab(){
       h('div',{class:'row sb'},h('div',{style:'min-width:0'},h('h2',{},hb.name),h('div',{class:'mut small'},n+' of last 7 days'+(hb.area_id?', '+aname(hb.area_id):''))),
         h('div',{class:'row t',style:'margin:0'},
           h('button',{class:'btn'+(set.has(today())?' ghost':' fill'),onclick:()=>htog(hb,today())},set.has(today())?'Done today':'Mark today'),
-          h('button',{class:'x','aria-label':'Remove habit',onclick:()=>{if(confirm('Remove '+hb.name+'?'))del('habits',hb.id);}},I('x')))),
+          h('button',{class:'x','aria-label':'Remove habit',onclick:()=>del('habits',hb.id,hb.name||'habit')},I('x')))),
       h('div',{class:'dots',style:'margin-top:14px'},dots)));
   });
   return w;
@@ -1411,7 +1464,7 @@ let cOpen=(()=>{try{return localStorage.getItem('chatc')!=='1';}catch(e){return 
 const csave=()=>{try{localStorage.setItem('chat',JSON.stringify(CH.slice(-40)));}catch(e){}};
 const wide=matchMedia('(min-width:1024px)');
 const cl=h('div',{class:'cl'});
-const cta=h('textarea',{id:'cin',rows:2,placeholder:'Ask about your plan'});
+const cta=h('textarea',{id:'cin',rows:2,placeholder:'Ask about your plan, for example: move Revise: Trees to Friday…'});
 const cer=h('div',{class:'cer',role:'status'});
 const csb=h('button',{class:'btn fill s',type:'submit'},I('send'),'Send');
 const cx=h('button',{class:'x',onclick:()=>cclose()});
