@@ -130,6 +130,16 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--color-primary);fl
 .x.mv:hover{color:var(--color-primary)}
 .x:disabled{opacity:.4;cursor:default}
 .x:disabled:hover{background:transparent;color:var(--color-muted-foreground)}
+.more>summary{background:var(--color-card);border:1px solid var(--color-border);border-radius:var(--r);padding:0 16px;margin-top:0;justify-content:space-between}
+.more>summary::after{content:'+';font-size:22px;font-weight:400}
+.more[open]>summary::after{content:'\2212'}
+.more[open]>summary{margin-bottom:16px}
+.more>.wrap{padding:0}
+.list li.up{background:var(--color-hl);color:var(--color-on-hl);border-radius:8px;border-top-color:transparent;padding:4px 8px}
+.list li.up .mut{color:var(--color-on-hl)}
+.list li.up label{flex:1 1 200px}
+.list label .mut{white-space:nowrap}
+.list li.up+li{border-top-color:transparent}
 .mvr{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
 .mvr input{width:150px}
 .pl label{flex-basis:200px}
@@ -198,6 +208,7 @@ body.cw #nav{right:360px}
 .bk{display:flex;align-items:center;gap:4px;min-width:0;background:var(--color-card);color:var(--color-card-foreground);border:1px solid var(--color-border);border-left-width:4px;border-radius:var(--r);padding-right:8px;flex-wrap:wrap}
 .bk.focus{border-left-color:var(--color-primary)}
 .bk.break{background:var(--color-muted);border-style:dashed;border-left-width:1px;font-size:14px}
+.bk.slim{padding:2px 12px;min-height:0;border-left-width:1px}
 .bk.fixed{border-left-color:var(--color-muted-foreground)}
 .bk.routine{border-left-color:var(--color-accent)}
 .bk.dn .bk-t{text-decoration:line-through;color:var(--color-muted-foreground)}
@@ -309,15 +320,16 @@ async function api(m,p,b,re){
 
 const E={courses:[],topics:[],rounds:[],tasks:[],quizzes:[],qt:[],dump:[],rem:[],habits:[],hlog:[],log:[],areas:[],goals:[],steps:[],today:[],routines:[],rsteps:[],rlog:[],notes:[],days:[],blocks:[]};
 let S=Object.assign({},E);
-const VW=['today','inbox','goals','now','plan','day','exams','tasks','quiz','rem','hab','rout','areas','log'];
-const hk=()=>{const k=location.hash.slice(1);return VW.includes(k)?k:null;};
-let tab=hk()||localStorage.getItem('tab')||'today';
-let mode=localStorage.getItem('mode')||'exam';
-let skip=0;
+const VW=['today','inbox','goals','now','day','exams','tasks','quiz','rem','hab','rout','areas','log'];
+const fixT=k=>k==='plan'?'day':k;
+const hk=()=>{const k=fixT(location.hash.slice(1));return VW.includes(k)?k:null;};
+let tab=hk()||fixT(localStorage.getItem('tab'))||'today';
 const openQ=new Set();
-const TOP=[['today','Today','sun',['today']],['inbox','Inbox','inbox',['inbox']],['goals','Goals','flag',['goals']],['study','Study','book',['now','plan','day','exams','tasks','quiz']],['more','More','menu',['rout','hab','rem','areas','log']]];
-const NM={now:'Focus',plan:'Plan',day:'Day',exams:'Exams',tasks:'Tasks',quiz:'Quizzes',rout:'Routines',hab:'Habits',rem:'Reminders',areas:'Areas and notes',log:'Log'};
-let pk=null,pmsg='',bmsg={},gsel=null;
+const dO=new Set();
+const dt=(k,cls,...c)=>h('details',{class:cls,open:dO.has(k),ontoggle:e=>{e.target.open?dO.add(k):dO.delete(k);}},...c);
+const TOP=[['today','Today','sun',['today']],['inbox','Inbox','inbox',['inbox']],['goals','Goals','flag',['goals']],['study','Study','book',['now','day','exams','tasks','quiz']],['more','More','menu',['rout','hab','rem','areas','log']]];
+const NM={now:'Focus',day:'Day',exams:'Exams',tasks:'Tasks',quiz:'Quizzes',rout:'Routines',hab:'Habits',rem:'Reminders',areas:'Areas and notes',log:'Log'};
+let bmsg={},gsel=null;
 
 const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const today=()=>ymd(new Date());
@@ -437,7 +449,7 @@ function link(k,id,on){
 }
 async function pullAll(){
   if(drag||PD.size||isF(document.activeElement))return;
-  try{await load();render(1);}catch(e){}
+  try{const a=JSON.stringify(S);await load();if(JSON.stringify(S)!==a)render(1);}catch(e){}
 }
 function fin(k,id,on=1){
   const o=S[k].find(x=>x.id===id);if(!o)return;
@@ -569,34 +581,10 @@ function tick(){
 }
 setInterval(tick,1000);
 
-function cands(){
-  const up=upc(),out=[],seen=new Set();
-  const put=o=>{const k=o.k+o.id;if(!seen.has(k)){seen.add(k);out.push(o);}};
-  const und=c=>S.topics.filter(t=>t.course_id===c.id&&!t.done).sort((a,b)=>a.id-b.id);
-  const sub=c=>c.name+', '+(c.kind==='oa'?'OA':'exam')+' in '+cd(c);
-  if(mode==='exam'){
-    up.forEach(c=>{
-      und(c).forEach(t=>put({k:'topics',id:t.id,title:t.title,sub:sub(c)}));
-      S.tasks.filter(x=>x.course_id===c.id&&!x.done&&x.kind==='todo').forEach(x=>put({k:'tasks',id:x.id,title:x.title,sub:c.name+', to-do'}));
-    });
-    S.tasks.filter(x=>!x.done&&x.due&&dd(x.due)<=1).forEach(x=>put({k:'tasks',id:x.id,title:x.title,sub:(cname(x.course_id)||'General')+', due '+rel(x.due)}));
-    S.quizzes.filter(q=>!q.done&&q.date&&dd(q.date)<=1).forEach(q=>put({k:'quizzes',id:q.id,title:'Quiz: '+q.title,sub:cname(q.course_id)+', '+rel(q.date)}));
-  }else{
-    const L=[];
-    S.tasks.filter(x=>!x.done).forEach(x=>L.push({due:x.due||'9999',o:{k:'tasks',id:x.id,title:x.title,sub:(cname(x.course_id)||'General')+', '+(x.kind==='assignment'?'assignment':'to-do')+(x.due?', due '+rel(x.due):'')}}));
-    S.quizzes.filter(q=>!q.done).forEach(q=>L.push({due:q.date||'9999',o:{k:'quizzes',id:q.id,title:'Quiz: '+q.title,sub:cname(q.course_id)+(q.date?', '+rel(q.date):'')}}));
-    up.forEach(c=>{const t=und(c)[0];if(t)L.push({due:c.date,o:{k:'topics',id:t.id,title:t.title,sub:sub(c)}});});
-    L.sort((a,b)=>a.due>b.due?1:a.due<b.due?-1:0).forEach(x=>put(x.o));
-  }
-  const td=today();
-  return out.filter(o=>o.k==='tasks'?S.tasks.some(x=>x.id===o.id&&!x.done&&x.due&&x.due<=td):o.k==='quizzes'&&S.quizzes.some(q=>q.id===o.id&&!q.done&&q.date&&q.date<=td));
-}
-
 const grp=k=>(TOP.find(g=>g[3].includes(k))||TOP[0]);
-function go(k){tab=k;localStorage.setItem('tab',k);if(location.hash!=='#'+k)location.hash=k;render();window.scrollTo(0,0);}
+function go(k){k=fixT(k);tab=k;localStorage.setItem('tab',k);if(location.hash!=='#'+k)location.hash=k;render();window.scrollTo(0,0);}
 window.addEventListener('hashchange',()=>{const k=hk();if(k&&k!==tab){tab=k;localStorage.setItem('tab',k);render();window.scrollTo(0,0);}});
 function goTop(g){go(g[0]==='study'||g[0]==='more'?(localStorage.getItem('sub_'+g[0])||g[3][0]):g[0]);}
-function setMode(m){mode=m;localStorage.setItem('mode',m);skip=0;render();}
 
 function head(){
   const nd=S.dump.filter(d=>!d.done).length,cg=grp(tab)[0];
@@ -624,7 +612,7 @@ function render(bg){
     if(e===ae){fk=k;try{ss=e.selectionStart;se=e.selectionEnd;}catch(x){}}
     if(bg&&(e.tagName==='TEXTAREA'||e.tagName==='INPUT'&&!/^(checkbox|radio)$/.test(e.type))&&e.value&&e.value!==(e._v||''))vs[k]=e.value;
   });
-  const v={today:vToday,inbox:vInbox,goals:vGoals,now:vNow,plan:vPlan,day:vDay,exams:vExams,tasks:vTasks,quiz:vQuiz,rem:vRem,hab:vHab,rout:vRout,areas:vAreas,log:vLog}[tab]||vToday;
+  const v={today:vToday,inbox:vInbox,goals:vGoals,now:vNow,day:vDay,exams:vExams,tasks:vTasks,quiz:vQuiz,rem:vRem,hab:vHab,rout:vRout,areas:vAreas,log:vLog}[tab]||vToday;
   const el=v(),sn=subnav();
   if(sn)el.prepend(sn);
   ap.replaceChildren(el);
@@ -666,19 +654,6 @@ async function addToday(b){
   await add('today',Object.assign({day:today(),sort:tdy().length,done:0},b));
   return true;
 }
-async function plan(){
-  pmsg='Thinking…';pk=null;render();
-  try{
-    const r=await api('POST','ai/plan',{day:today()});
-    if(!r||!Array.isArray(r.picks))throw 0;
-    pk=r.picks.slice(0,3);pmsg=pk.length?'':'Nothing to suggest right now.';
-  }catch(e){pmsg='Planning is not available right now. Pick one thing yourself.';}
-  render();
-}
-async function accept(p){
-  if(await addToday({ref_kind:p.ref_kind||null,ref_id:p.ref_id||null,title:p.title}))pk=pk.filter(x=>x!==p);
-  render();
-}
 function wk(){const d=new Date();d.setDate(d.getDate()-(d.getDay()+6)%7);return ymd(d);}
 function bal(){
   const s=wk(),m={},st=(S.areas.find(a=>/^study$/i.test(a.name))||{}).id;
@@ -717,43 +692,40 @@ function routCard(r,full){
       full?h('button',{class:'x','aria-label':'Remove step',onclick:()=>del('rsteps',s.id,s.title||'step')},I('x')):null);})),
     full?quick('Add a step',v=>add('rsteps',{routine_id:r.id,title:v,sort:ss.length})):null);
 }
+const rv=t=>(t.title||'').startsWith('Revise: ');
+const obs=d=>S.blocks.filter(b=>b.day===d&&b.kind!=='break'&&!b.done).sort((a,b)=>hm2m(a.start)-hm2m(b.start)||a.id-b.id);
+const bref=b=>({k:'blocks',id:b.id,title:b.title||b.kind,sub:'Planned at '+b.start+', '+(b.mins||0)+' min'});
 function vToday(){
   const w=h('div',{class:'wrap'});
   remBan(w);
-  const t=getTm(),xs=tdy(),op=xs.filter(x=>!x.done);
-  const morn=!xs.length&&new Date().getHours()<12;
+  const t=getTm(),xs=tdy(),op=xs.filter(x=>!x.done),pl=obs(today()),nx=pl[0];
   if(t)w.append(focusCard(t));
-  if(morn)w.append(h('div',{class:'card'},h('h2',{},'Pick your top 3 for today'),h('div',{class:'mut small',style:'margin:4px 0 0'},'Three is the limit. Pick the ones that matter most.'),quick('Add a priority',v=>addToday({title:v}))));
-  const c=h('div',{class:'card'},
-    h('div',{class:'row sb'},h('div',{},h('div',{class:'ey'},'Today'),h('h2',{},op.length?'Up to 3 things. That is enough.':xs.length?'All done for today.':'Pick up to 3 things')),
-      h('button',{class:'btn s',onclick:plan},I('spark'),'Plan my day')),
+  const any=S.blocks.some(b=>b.day===today()&&b.kind!=='break');
+  w.append(h('div',{class:'card'},
+    h('div',{class:'row sb'},h('h2',{},"Today's plan"),h('button',{class:'btn s',onclick:()=>{dsel=today();go('day');}},'Open day')),
+    pl.length?h('ul',{class:'list'},pl.map(b=>h('li',{class:b===nx?'up':''},
+      h('label',{},h('input',{type:'checkbox','aria-label':'Done: '+(b.title||b.kind),onchange:e=>{const v=e.target.checked?1:0;upd('blocks',b.id,{done:v});link('blocks',b.id,v);}}),h('span',{class:'mut small'},b.start),h('span',{},b.title||b.kind)),
+      b===nx?h('span',{class:'tag td'},'Up next'):null,
+      b===nx&&!t?h('button',{class:'btn s',onclick:()=>startFocus(bref(b),getDur())},I('play'),'Start'):null)))
+      :h('p',{class:'mut small'},any?'Everything planned for today is done.':'Nothing planned yet. Open the day to plan it.')));
+  if(xs.length)w.append(h('div',{class:'card'},h('h3',{},'Also on your list'),
     h('ul',{class:'list'},xs.map(x=>h('li',{class:x.done?'dn':''},
       h('label',{},h('input',{type:'checkbox',checked:!!x.done,onchange:e=>tdone(x,e.target.checked)}),x.title),
-      x.done?null:h('button',{class:'btn s',onclick:()=>startFocus({k:'today',id:x.id,title:x.title,sub:'Today priority'},getDur())},I('play'),'Start'),
-      h('button',{class:'x','aria-label':'Remove from today',onclick:()=>del('today',x.id,x.title||'item')},I('x'))))),
-    xs.length<3&&!morn?quick('Add a priority',v=>addToday({title:v})):null,
-    pmsg?h('div',{class:'qm',role:'status'},pmsg):null,
-    pk&&pk.length?h('div',{},h('h3',{style:'margin-top:12px'},'Suggestions'),h('ul',{class:'list'},pk.map(p=>h('li',{},
-      h('div',{class:'lt'},h('div',{},h('div',{},p.title),p.why?h('div',{class:'mut small'},p.why):null)),
-      h('button',{class:'btn s',onclick:()=>accept(p)},'Accept'))))):null);
-  w.append(c);
+      h('button',{class:'x','aria-label':'Remove from today',onclick:()=>del('today',x.id,x.title||'item')},I('x')))))));
   if(!t){
-    const f=op[0];
-    w.append(h('button',{class:'btn cta lg wide',onclick:()=>just5(f?{k:'today',id:f.id,title:f.title,sub:'Just 5 minutes'}:{title:'Just 5 minutes',sub:'Any small thing'})},I('play'),'Just start 5 min'));
+    const f=nx?bref(nx):op[0];
+    w.append(h('button',{class:'btn cta lg wide',onclick:()=>just5(f?(nx?{k:'blocks',id:nx.id,title:f.title,sub:'Just 5 minutes'}:{k:'today',id:f.id,title:f.title,sub:'Just 5 minutes'}):{title:'Just 5 minutes',sub:'Any small thing'})},I('play'),'Just start 5 min'));
   }
-  const gs=S.goals.filter(g=>!g.done);
-  const pl=S.blocks.filter(b=>b.day===today()).sort((a,b)=>hm2m(a.start)-hm2m(b.start)||a.id-b.id);
-  w.append(h('div',{class:'card'},h('div',{class:'row sb'},h('h3',{},"Today's plan"),h('button',{class:'btn s',onclick:()=>{dsel=today();go('day');}},'Open day planner')),
-    pl.length?h('ul',{class:'list'},pl.map(b=>h('li',{class:b.done?'dn':''},h('label',{},h('input',{type:'checkbox',checked:!!b.done,onchange:e=>{const v=e.target.checked?1:0;upd('blocks',b.id,{done:v});link('blocks',b.id,v);}}),h('span',{class:'mut small'},b.start+'  '),b.title||b.kind))))
-      :h('p',{class:'mut small'},'No plan for today yet. Open the day planner to plan it.')));
-  if(gs.length)w.append(h('div',{class:'card'},h('h3',{},'Next step on each goal'),
+  const gs=S.goals.filter(g=>!g.done),m=dt('more','more',h('summary',{},'More for today'),h('div',{class:'wrap'}));
+  const mw=m.lastChild;
+  if(gs.length)mw.append(h('div',{class:'card'},h('h3',{},'Next step on each goal'),
     h('ul',{class:'list'},gs.map(g=>{const s=nstep(g);return h('li',{},
       s?h('label',{},h('input',{type:'checkbox',onchange:e=>fin('steps',s.id,e.target.checked?1:0)}),h('span',{},s.title,h('span',{class:'mut small'},'  ('+g.title+')')))
        :h('div',{class:'lt mut'},g.title+': no open steps'),
       s&&xs.length<3?h('button',{class:'btn s ghost',onclick:()=>addToday({ref_kind:'step',ref_id:s.id,title:s.title})},'To today'):null);}))));
-  const rs=S.routines.filter(r=>(r.part||'am')===part());
-  rs.forEach(r=>w.append(routCard(r,false)));
-  const b=balRow();if(b)w.append(b);
+  S.routines.filter(r=>(r.part||'am')===part()).forEach(r=>mw.append(routCard(r,false)));
+  const b=balRow();if(b)mw.append(b);
+  if(mw.children.length)w.append(m);
   return w;
 }
 
@@ -923,8 +895,7 @@ function strip(){
   const fm=tl.filter(l=>l.kind==='focus').reduce((a,l)=>a+(+l.mins||0),0);
   const b=h('div',{class:'strip'});
   b.append(h('div',{class:'stats'},h('span',{class:'stat'},h('b',{},dn),' done today'),h('span',{class:'stat'},h('b',{},fm),' focus minutes')));
-  const show=mode==='exam'?up:up.slice(0,1);
-  if(show.length)b.append(h('div',{class:'tiles'},show.map(tile)));
+  if(up.length)b.append(h('div',{class:'tiles'},up.slice(0,3).map(tile)));
   return b;
 }
 function durRow(){
@@ -1038,11 +1009,6 @@ function snooze(r){
   const f=fired().filter(x=>x!==r.id);localStorage.setItem('fired',JSON.stringify(f));
   upd('rem',r.id,{at:lt(Date.now()+6e5)});
 }
-function modeSeg(){
-  return h('div',{class:'seg',role:'group','aria-label':'Mode'},
-    h('button',{class:mode==='exam'?'on':'','aria-pressed':mode==='exam'?'true':'false',onclick:()=>setMode('exam')},'Exam mode'),
-    h('button',{class:mode==='normal'?'on':'','aria-pressed':mode==='normal'?'true':'false',onclick:()=>setMode('normal')},'Normal mode'));
-}
 function vNow(){
   const w=h('div',{class:'wrap'});
   if(!S.courses.length){
@@ -1050,42 +1016,27 @@ function vNow(){
     return w;
   }
   remBan(w);
-  w.append(modeSeg());
   w.append(strip());
   const t=getTm();
   if(t){w.append(focusCard(t));return w;}
-  const td=today(),nm=new Date().getHours()*60+new Date().getMinutes();
-  const ob=S.blocks.filter(b=>b.day===td&&!b.done&&b.kind!=='break').sort((a,b)=>hm2m(a.start)-hm2m(b.start)||a.id-b.id);
+  const nm=new Date().getHours()*60+new Date().getMinutes();
+  const ob=obs(today());
   const lb=ob.filter(b=>hm2m(b.start)+(+b.mins||0)>nm);
   const pl=lb.length?lb:ob;
-  if(pl.length){
-    const b=pl[skip%pl.length],x={k:'blocks',id:b.id,title:b.title||b.kind,sub:'Planned at '+b.start+', '+(b.mins||0)+' min'};
-    w.append(h('div',{class:'hero'},
-      h('div',{class:'ey'},'Next in your plan'),h('h1',{class:'big'},x.title),h('div',{class:'sub'},x.sub),
-      durRow(),
-      h('div',{class:'row'},
-        h('button',{class:'btn cta lg',onclick:()=>startFocus(x,getDur())},I('play'),'Start focus'),
-        h('button',{class:'btn ghost',onclick:()=>fin('blocks',b.id)},'Mark done'),
-        pl.length>1?h('button',{class:'btn ghost',onclick:()=>{skip++;render();}},'Show another'):null)));
-    w.append(h('div',{class:'mut small center'},pl.length>1?(pl.length-1)+' more planned today.':'This is the last planned item today.'));
+  if(!pl.length){
+    w.append(h('div',{class:'card center'},h('h2',{},'Nothing planned'),
+      h('p',{class:'mut'},'No open block left today. Plan the day and the next one shows up here.'),
+      h('button',{class:'btn',onclick:()=>{dsel=today();go('day');}},'Open day')));
     return w;
   }
-  const c=cands();
-  if(!c.length){
-    w.append(h('div',{class:'card center'},h('h2',{},'Nothing queued'),
-      h('p',{class:'mut'},mode==='exam'?'Add topics under your exams and they show up here one at a time.':'Add tasks, quizzes or exam topics and the next one shows up here.'),
-      h('button',{class:'btn',onclick:()=>go('exams')},'Add exam topics')));
-    return w;
-  }
-  const x=c[skip%c.length];
+  const b=pl[0],x=bref(b);
   w.append(h('div',{class:'hero'},
-    h('div',{class:'ey'},'Do this next'),h('h1',{class:'big'},x.title),h('div',{class:'sub'},x.sub),
+    h('div',{class:'ey'},'Next in your plan'),h('h1',{class:'big'},x.title),h('div',{class:'sub'},x.sub),
     durRow(),
     h('div',{class:'row'},
       h('button',{class:'btn cta lg',onclick:()=>startFocus(x,getDur())},I('play'),'Start focus'),
-      h('button',{class:'btn ghost',onclick:()=>fin(x.k,x.id)},'Mark done'),
-      h('button',{class:'btn ghost',onclick:()=>{skip++;render();}},'Show another'))));
-  w.append(h('div',{class:'mut small center'},c.length>1?(c.length-1)+' more are waiting. You do not need to look at them.':'This is the last one.'));
+      h('button',{class:'btn ghost',onclick:()=>fin('blocks',b.id)},'Mark done'))));
+  w.append(h('div',{class:'mut small center'},pl.length>1?(pl.length-1)+' more planned today.':'This is the last planned item today.'));
   return w;
 }
 
@@ -1127,13 +1078,14 @@ function examCard(c){
       h('div',{style:'min-width:0'},h('h2',{},c.name),h('div',{class:'mut small'},(c.kind==='oa'?'Online assessment':'Exam')+(c.date?', '+fd(c.date)+(c.time?' at '+c.time:''):', no date yet'))),
       h('div',{class:'cdw'},c.date?cd(c):'')),
     h('div',{class:'bar'},h('i',{style:'width:'+(b?100*a/b:0)+'%'})),
-    h('div',{class:'row sb'},h('div',{class:'mut small'},b?a+' of '+b+' topics covered':'No topics yet'),
-      h('button',{class:'btn s',disabled:!ts.length,onclick:async()=>{if(!ts.length)return;await api('POST','rounds',ts.map(t=>({topic_id:t.id,done:0})));await load();render();}},'+ Add round')),
+    h('div',{class:'mut small'},b?a+' of '+b+' topics covered':'No topics yet'),
     h('ul',{class:'list'},ts.map(t=>h('li',{class:t.done?'dn':''},
       h('span',{class:'boxes'},S.rounds.filter(r=>r.topic_id===t.id).map((r,i)=>h('input',{type:'checkbox',checked:!!r.done,'aria-label':'Round '+(i+1)+' of '+t.title,onchange:e=>upd('rounds',r.id,{done:e.target.checked?1:0})})),
         ),
       h('label',{},h('input',{type:'checkbox',checked:!!t.done,onchange:e=>topicTog(t,e.target.checked)}),t.title),
       h('button',{class:'x',title:'Remove topic','aria-label':'Remove topic',onclick:()=>del('topics',t.id,t.title||'item')},I('x'))))),
+    dt('rd'+c.id,'',h('summary',{},'Study rounds'),h('p',{class:'mut small'},'Adds one more checkbox to every topic, for another pass of revision.'),
+      h('button',{class:'btn s',disabled:!ts.length,onclick:async()=>{if(!ts.length)return;await api('POST','rounds',ts.map(t=>({topic_id:t.id,done:0})));await load();render();}},'+ Add round')),
     h('details',{},h('summary',{},'Add topics'),bulk(c)),
     h('div',{class:'row t'},
       h('input',{type:'date','aria-label':'Exam date',value:c.date||'',onchange:e=>upd('courses',c.id,{date:e.target.value||null})}),
@@ -1203,7 +1155,6 @@ function quizCard(q){
       h('div',{class:'row t',style:'margin:0'},
         h('span',{class:'tag'},cname(q.course_id)),
         q.date?h('span',{class:'tag'+(!q.done&&dd(q.date)<0?' bad':'')},rel(q.date)):null,
-        !q.done&&q.date&&dd(q.date)>=0?h('button',{class:'btn s',onclick:()=>{rp=mkRp('q:'+q.id);go('plan');}},'Replan'):null,
         h('button',{class:'x','aria-label':'Remove quiz',onclick:()=>del('quizzes',q.id,q.title||'item')},I('x')))),
     h('details',{open:openQ.has(q.id),ontoggle:e=>{e.target.open?openQ.add(q.id):openQ.delete(q.id);}},
       h('summary',{},'Covers '+cv+(cv===1?' topic':' topics')),
@@ -1215,7 +1166,7 @@ function quizCard(q){
 function vQuiz(){
   const w=h('div',{class:'wrap'});
   if(!S.courses.length){w.append(h('div',{class:'card center'},h('p',{},'Add an exam first, then quizzes can be linked to it.'),h('button',{class:'btn',onclick:()=>go('exams')},'Go to Exams')));return w;}
-  w.append(h('div',{class:'card'},h('h3',{},'New quiz'),qForm()));
+  w.append(dt('nq','card',h('summary',{style:'margin-top:0'},'New quiz with topics'),qForm()));
   [...S.quizzes].sort((a,b)=>(a.done-b.done)||((a.date||'9')>(b.date||'9')?1:-1)).forEach(q=>w.append(quizCard(q)));
   if(!S.quizzes.length)w.append(h('div',{class:'mut center'},'No quizzes yet.'));
   return w;
@@ -1245,43 +1196,13 @@ function qForm(){
     const r=await api('POST','quizzes',{course_id:+cs.value,title:ti.value.trim(),date:du.value||null});
     if(sel.size&&r&&r.id)await api('POST','qt',[...sel].map(id=>({quiz_id:r.id,topic_id:id})));
     await load();render();
-    toast(du.value?'Quiz saved. Use Replan to fit revision around it.':'Quiz saved.');
+    toast('Quiz saved.');
   }},h('div',{class:'form'},ti,cs,du),tb,h('div',{class:'row'},h('button',{class:'btn fill',type:'submit'},'Add quiz')));
 }
 
-let rp=null;
 const addD=(d,k)=>{const x=new Date(d+'T00:00:00');x.setDate(x.getDate()+k);return ymd(x);};
-const mxd=(a,b)=>a>b?a:b;
-function sp(ts,a,b){
-  if(b<a)b=a;
-  const ds=[];for(let d=a;d<=b;d=addD(d,1))ds.push(d);
-  return ts.map((t,i)=>({t,d:ds[Math.floor(i*ds.length/ts.length)]}));
-}
-function mkRp(v){
-  const k=v[0],id=+v.slice(2),td=today();
-  const tid=t=>{const x=S.topics.find(y=>y.course_id===t.course_id&&y.title===t.title.slice(8));return x?x.id:1e12+t.id;};
-  const rv=cid=>S.tasks.filter(t=>t.course_id===cid&&!t.done&&t.title.startsWith('Revise: ')).sort((a,b)=>tid(a)-tid(b)||a.id-b.id);
-  if(k==='q'){
-    const q=S.quizzes.find(x=>x.id===id);if(!q||!q.date)return null;
-    const c=S.courses.find(x=>x.id===q.course_id)||{},cov=new Set(S.qt.filter(r=>r.quiz_id===id).map(r=>r.topic_id));
-    const rs=rv(q.course_id),A=rs.filter(t=>cov.has(tid(t))),B=rs.filter(t=>!cov.has(tid(t)));
-    const s2=mxd(td,addD(q.date,1));
-    return{lab:'Quiz: '+q.title,mv:[...sp(A,td,addD(q.date,-1)),...(c.date?sp(B,s2,addD(c.date,-1)):[])].map(fx),warn:wn(q.course_id)};
-  }
-  const c=S.courses.find(x=>x.id===id);if(!c||!c.date)return null;
-  return{lab:c.name+' exam',mv:sp(rv(id),td,addD(c.date,-1)).map(fx),warn:wn(id)};
-}
 const lim=cid=>{const c=S.courses.find(x=>x.id===cid);return c&&c.date?addD(c.date,-1):null;};
 const cap=(cid,d)=>{const l=lim(cid);return l&&d>l?(l<today()?today():l):d;};
-const fx=m=>({t:m.t,d:cap(m.t.course_id,m.d)});
-const wn=cid=>{const l=lim(cid);return l&&l<today()?'The exam is today or already past, so revision stays on today instead of the day before.':'';};
-async function applyRp(){
-  const ch=rp.mv.filter(m=>m.t.due!==m.d);
-  rp=null;
-  await Promise.all(ch.map(m=>api('PATCH','tasks/'+m.t.id,{due:m.d})));
-  await load();render();
-  toast(ch.length+(ch.length===1?' task moved.':' tasks moved.'));
-}
 function mvTo(t,d){
   if(!d||d<today()){toast('Pick today or a later day.');render();return;}
   const c=cap(t.course_id,d);
@@ -1290,65 +1211,26 @@ function mvTo(t,d){
   upd('tasks',t.id,{due:c});
 }
 function planRow(t){
-  const td=today(),od=t.due<td,l=lim(t.course_id),lt2=l&&!t.done&&t.due>l,eve=l&&t.due===l;
+  const td=today(),l=lim(t.course_id);
   return h('li',{class:'pl'+(t.done?' dn':'')},
     h('label',{},h('input',{type:'checkbox',checked:!!t.done,onchange:e=>fin('tasks',t.id,e.target.checked?1:0)}),t.title),
     t.course_id?h('span',{class:'tag'},cname(t.course_id)):null,
-    lt2?h('span',{class:'tag bad'},'Too late'):null,
-    lt2?h('button',{class:'btn s',onclick:()=>mvTo(t,cap(t.course_id,t.due))},'Fix'):null,
-    !t.done&&eve?h('span',{class:'mut small'},'Last day before the exam'):null,
     t.done?null:h('div',{class:'mvr'},
       h('button',{class:'x mv','aria-label':'Move '+t.title+' a day earlier',title:'A day earlier',disabled:t.due<=td,onclick:()=>mvTo(t,addD(t.due,-1))},I('cl')),
       h('input',{type:'date',min:td,max:l&&l>=td?l:false,value:t.due,'aria-label':'Due date for '+t.title,onchange:e=>mvTo(t,e.target.value)}),
-      h('button',{class:'x mv','aria-label':'Move '+t.title+' a day later',title:l&&t.due>=l?'Must be done before the exam':'A day later',disabled:!!(l&&t.due>=l&&!od),onclick:()=>mvTo(t,od?td:addD(t.due,1))},I('cr'))));
+      h('button',{class:'x mv','aria-label':'Move '+t.title+' to today',title:'Move to today',onclick:()=>mvTo(t,td)},I('cr'))));
 }
-function rpCard(){
-  if(!rp)return null;
-  const ch=rp.mv.filter(m=>m.t.due!==m.d).length;
-  return h('div',{class:'card now'},h('h3',{},'Replan preview: '+rp.lab),
-    rp.warn?h('p',{class:'ev',role:'status'},rp.warn):null,
-    rp.mv.length?h('ul',{class:'list'},rp.mv.map(m=>h('li',{},h('div',{class:'lt'},m.t.title),
-      h('span',{class:'tag'},m.t.due===m.d?'stays '+fd(m.d):(m.t.due?fd(m.t.due):'no date')+' to '+fd(m.d)))))
-      :h('p',{class:'mut small'},'No open "Revise:" tasks to move.'),
-    h('div',{class:'row'},ch?h('button',{class:'btn cta',onclick:applyRp},'Apply '+ch+(ch===1?' change':' changes')):null,
-      h('button',{class:'btn ghost',onclick:()=>{rp=null;render();}},'Cancel')));
-}
-function vPlan(){
-  const w=h('div',{class:'wrap'}),td=today();
-  const qs=S.quizzes.filter(q=>!q.done&&q.date&&q.date>=td),cs=upc();
-  const rs=h('select',{'aria-label':'Replan around'},qs.map(q=>h('option',{value:'q:'+q.id},'Quiz: '+q.title+' ('+fd(q.date)+')')),cs.map(c=>h('option',{value:'c:'+c.id},c.name+' exam ('+fd(c.date)+')')));
-  const go1=v=>{rp=mkRp(v);if(!rp)toast('That one needs a date first.');render();};
-  w.append(h('div',{class:'card'},h('h2',{},'Plan'),h('p',{class:'mut small',style:'margin:4px 0 12px'},'Every day until your last exam. Move a task if a day gets heavy.'),
-    qs.length||cs.length?h('div',{class:'form'},rs,h('button',{class:'btn fill',onclick:()=>go1(rs.value)},'Preview replan')):null,
-    h('details',{},h('summary',{},'New quiz with topics'),S.courses.length?qForm():h('p',{class:'mut small'},'Add an exam first.'))));
-  w.append(weekCard());
-  const rc=rpCard();if(rc)w.append(rc);
-  const od=S.tasks.filter(t=>!t.done&&t.due&&t.due<td).sort((a,b)=>a.due>b.due?1:-1);
-  if(od.length)w.append(h('div',{class:'card'},h('h3',{},'Overdue'),h('span',{class:'tag bad'},od.length+' open'),h('ul',{class:'list'},od.map(planRow))));
-  const ds=[...cs.map(c=>c.date),...qs.map(q=>q.date),...S.tasks.filter(t=>!t.done&&t.due).map(t=>t.due)].filter(d=>d>=td);
-  if(!ds.length){w.append(h('div',{class:'card center mut'},'Nothing dated yet. Add exam dates under Exams.'));return w;}
-  const end=ds.reduce(mxd);
-  for(let d=td;d<=end;d=addD(d,1)){
-    const ex=S.courses.filter(c=>c.date===d),qz=S.quizzes.filter(q=>q.date===d);
-    const ts=S.tasks.filter(t=>t.due===d).sort((a,b)=>a.done-b.done||a.id-b.id),n=ts.filter(t=>!t.done).length;
-    w.append(h('div',{class:'card pd'+(d===td?' now':'')},
-      h('div',{class:'row sb'},h('h3',{},new Date(d+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})),
-        h('div',{class:'row t',style:'margin:0'},d===td?h('span',{class:'tag td'},'Today'):null,
-          n>6?h('span',{class:'tag bad'},'Overloaded: '+n+' open tasks'):h('span',{class:'tag'},n?n+' open':'Free'))),
-      ex.map(c=>h('div',{class:'ev'},h('span',{},(c.kind==='oa'?'Online assessment: ':'Exam: ')+c.name+(c.time?' at '+c.time:'')),h('span',{class:'sp'}),
-        d>td?h('button',{class:'btn s',onclick:()=>go1('c:'+c.id)},'Replan'):null)),
-      qz.map(q=>h('div',{class:'ev'},h('span',{},'Quiz: '+q.title+', '+cname(q.course_id)+(q.done?' (done)':'')),h('span',{class:'sp'}),
-        !q.done?h('button',{class:'btn s',onclick:()=>go1('q:'+q.id)},'Replan'):null)),
-      ts.length?h('ul',{class:'list'},ts.map(planRow)):null));
-  }
-  return w;
+function odCard(){
+  const od=S.tasks.filter(t=>!t.done&&!rv(t)&&t.due&&t.due<today()).sort((a,b)=>a.due>b.due?1:-1);
+  if(!od.length)return null;
+  return h('div',{class:'card'},h('div',{class:'row sb'},h('h3',{},'Overdue'),h('span',{class:'tag bad'},od.length+' open')),h('ul',{class:'list'},od.map(planRow)));
 }
 
 function weekCard(){
   const s=wk(),e=addD(s,6),nx=addD(s,7);
   const dn=S.log.filter(l=>l.day>=s&&l.day<=e&&l.kind!=='focus').length;
-  const op=S.tasks.filter(t=>!t.done&&t.due&&t.due>=s&&t.due<=e);
-  return h('details',{class:'card'},h('summary',{style:'margin-top:0;font-weight:700'},'This week'),
+  const op=S.tasks.filter(t=>!t.done&&!rv(t)&&t.due&&t.due>=s&&t.due<=e);
+  return dt('wk','card',h('summary',{style:'margin-top:0;font-weight:700'},'This week'),
     h('div',{class:'stats',style:'margin-top:8px'},h('span',{class:'stat'},h('b',{},dn),' done'),h('span',{class:'stat'},h('b',{},op.length),' open tasks due this week')),
     op.length?h('div',{class:'row t'},h('button',{class:'btn s',onclick:()=>moveWk(op,nx)},'Move open items to next week')):h('p',{class:'mut small'},'No open tasks due this week.'),
     h('div',{class:'qm'},'Quizzes are not moved. Tasks move to the Monday after this one, and an exam still caps them.'));
@@ -1360,7 +1242,7 @@ function moveWk(xs,nx){
 }
 
 let dsel=today(),dpl=null,bkEd=null;
-const RMIN=15,FOCUS=45,BRK=10;
+const RMIN=15,FOCUS=90,BRK=20;
 const hm2m=s=>{const[a,b]=String(s||'0:0').split(':').map(Number);return a*60+b;};
 const m2hm=m=>pad(Math.floor(m/60))+':'+pad(m%60);
 function dwin(d){const x=S.days.find(y=>y.day===d);return{start:(x&&x.start)||'07:00',end:(x&&x.end)||'23:00'};}
@@ -1396,13 +1278,6 @@ function fill(d,td){
   const put=b=>out.push(Object.assign({day:d,done:0},b));
   const tk=t=>({title:t.title,mins:FOCUS,ref_kind:'task',ref_id:t.id});
   const qk=q=>({title:'Quiz: '+q.title,mins:FOCUS,ref_kind:'quiz',ref_id:q.id});
-  const rev=t=>{
-    const tp=S.topics.find(x=>x.title===t.title.slice(8).trim()&&x.course_id===t.course_id);
-    if(!tp)return[tk(t)];
-    const xs=[];let r=+tp.mins||FOCUS;
-    while(r>0){const c=Math.min(FOCUS,r);xs.push({title:t.title+(xs.length?' (part '+(xs.length+1)+')':''),mins:c,ref_kind:'topic',ref_id:tp.id});r-=c;}
-    return xs;
-  };
   [...S.routines].sort((a,b)=>((a.part==='pm')-(b.part==='pm'))||a.id-b.id).forEach(r=>{
     const x=first(RMIN,r.part==='pm'?19*60:7*60);
     if(x==null){skip.push({title:r.name,mins:RMIN});return;}
@@ -1413,7 +1288,18 @@ function fill(d,td){
   const byD=(a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0;
   const g1=[...opn.filter(t=>t.due&&t.due<td).map(t=>[t.due,tk(t)]),...qz.filter(q=>q.date<td).map(q=>[q.date,qk(q)])].sort(byD).map(x=>x[1]);
   const g2=[...opn.filter(t=>t.due===td&&!t.title.startsWith('Revise: ')).map(tk),...qz.filter(q=>q.date===td).map(qk)];
-  const g3=opn.filter(t=>t.due===td&&t.title.startsWith('Revise: ')).flatMap(rev);
+  const up=S.courses.filter(c=>c.date&&c.date>d).sort((a,b)=>a.date>b.date?1:-1);
+  const openT=c=>S.topics.filter(t=>t.course_id===c.id&&!t.done).sort((a,b)=>a.id-b.id);
+  const lite=c=>openT(c).reduce((a,t)=>a+(+t.mins||FOCUS),0)<=120;
+  const evc=up.find(c=>c.date===addD(d,1)),src=evc?[evc]:up.filter(c=>!lite(c));
+  const g3=[];let acc=0;const room=Math.max(0,freeMin(d));
+  outer:for(const c of src){
+    const cd2=c.name.split(' ')[0];
+    for(const t of openT(c)){
+      let r=+t.mins||FOCUS;const full=r;
+      while(r>0){if(acc>=room)break outer;const k=Math.min(FOCUS,r);g3.push({title:cd2+': '+t.title+(k<full?' (part)':''),mins:k,ref_kind:'topic',ref_id:t.id});r-=k;acc+=k;}
+    }
+  }
   [...g1,...g2,...g3].forEach(it=>{
     const x=first(it.mins);
     if(x==null){skip.push({title:it.title,mins:it.mins});return;}
@@ -1458,6 +1344,21 @@ function dpCard(d){
     p.r.skip.length?h('div',{},h('h3',{style:'margin-top:12px'},'Not scheduled'),h('ul',{class:'list'},p.r.skip.map(x=>h('li',{},h('div',{class:'lt'},x.title+', '+x.mins+' min'))))):null,
     h('div',{class:'row'},h('button',{class:'btn cta',onclick:applyDp},'Apply plan'),h('button',{class:'btn ghost',onclick:()=>{dpl=null;render();}},'Discard')));
 }
+function reflow(day,id){
+  const w=dwin(day),end=hm2m(w.end),all=S.blocks.filter(x=>x.day===day),me=all.find(x=>x.id===id);
+  if(!me)return;
+  const len=x=>+x.mins||0,fx=all.filter(x=>x.kind==='fixed'&&x.id!==id).map(x=>[hm2m(x.start),hm2m(x.start)+len(x)]).sort((a,b)=>a[0]-b[0]);
+  let cur=hm2m(me.start)+len(me),mv=0,late=0;
+  const ov=fx.find(f=>hm2m(me.start)<f[1]&&cur>f[0]);
+  const later=all.filter(x=>x.id!==id&&x.kind!=='fixed'&&!x.done&&hm2m(x.start)>=hm2m(me.start)).sort((a,b)=>hm2m(a.start)-hm2m(b.start)||a.id-b.id);
+  for(const x of later){
+    let st=Math.max(hm2m(x.start),cur),moved=true;
+    while(moved){moved=false;for(const f of fx){if(st<f[1]&&st+len(x)>f[0]){st=f[1];moved=true;}}}
+    if(st!==hm2m(x.start)){upd('blocks',x.id,{start:m2hm(st)});mv++;}
+    cur=st+len(x);if(cur>end)late++;
+  }
+  if(mv||late||ov)toast((mv?'Moved '+mv+' later block'+(mv===1?'':'s')+'. ':'')+(late?late+' now run past the end of the day. ':'')+(ov?'This block overlaps a fixed block.':''),{err:!!(late||ov)});
+}
 function bkEdit(b){
   const st=h('input',{type:'time',value:b.start,'aria-label':'Start time'}),ln=h('input',{type:'number',min:5,max:600,step:5,value:b.mins,'aria-label':'Length in minutes'});
   return h('div',{class:'bk-ed'},
@@ -1466,11 +1367,13 @@ function bkEdit(b){
       const s=st.value,m=+ln.value;bkEd=null;
       if(!s||!(m>0)){toast('Pick a start time and a length.');render();return;}
       upd('blocks',b.id,{start:s,mins:m});
+      reflow(b.day,b.id);
     }},'Save'),
     h('button',{class:'btn s ghost',onclick:()=>{bkEd=null;render();}},'Cancel'),
     h('button',{class:'btn s ghost',onclick:()=>{bkEd=null;del('blocks',b.id,b.title||b.kind);}},'Delete'));
 }
 function bkCard(b){
+  if(b.kind==='break')return h('div',{class:'bk break slim'},h('span',{class:'mut small'},'Break, '+(b.mins||0)+' min'));
   if(bkEd===b.id)return h('div',{class:'bk '+b.kind},bkEdit(b));
   const sp=Math.max(1,Math.ceil((+b.mins||RMIN)/RMIN));
   return h('div',{class:'bk '+b.kind+(b.done?' dn':''),style:'min-height:'+Math.max(44,sp*24)+'px'},
@@ -1527,7 +1430,7 @@ function shiftCard(d){
 function tl(d){
   if(drag&&drag.moved)return tlGrid(d);
   const bs=S.blocks.filter(b=>b.day===d).sort((a,b)=>hm2m(a.start)-hm2m(b.start)||a.id-b.id);
-  if(!bs.length)return h('p',{class:'mut small'},'Nothing planned yet. Press Propose plan, or add a fixed block.');
+  if(!bs.length)return h('p',{class:'mut small'},'Nothing planned yet. Press Propose plan, or add a fixed block under Edit this day.');
   return h('div',{class:'tl'},bs.map(b=>h('div',{class:'tl-r'},h('div',{class:'tl-t'},b.start+' – '+m2hm(hm2m(b.start)+(+b.mins||0))),h('div',{class:'tl-c'},bkCard(b)))));
 }
 function tlGrid(d){
@@ -1556,26 +1459,29 @@ function vDay(){
       h('div',{class:'row t',style:'margin:0'},
         h('button',{class:'x','aria-label':'Previous day',onclick:()=>{dsel=addD(d,-1);dpl=null;bkEd=null;render();}},I('cl')),
         h('button',{class:'x','aria-label':'Next day',onclick:()=>{dsel=addD(d,1);dpl=null;bkEd=null;render();}},I('cr')),
-        d!==td?h('button',{class:'btn s',onclick:()=>{dsel=td;dpl=null;bkEd=null;render();}},'Today'):null))));
-  const st=h('input',{type:'time',value:win.start,'aria-label':'Day starts'}),en=h('input',{type:'time',value:win.end,'aria-label':'Day ends'});
-  w.append(h('div',{class:'card'},h('h3',{},'Day window'),
-    h('div',{class:'form'},h('label',{class:'small mut'},'Start ',st),h('label',{class:'small mut'},'End ',en),
-      h('button',{class:'btn s fill',onclick:()=>saveWin(d,st.value,en.value)},'Save window')),
-    ft<0?h('p',{class:'ev',role:'status'},'Overloaded: fixed blocks are '+(-ft)+' min longer than this window. Shorten them or widen the window.')
-      :h('p',{class:'mut small'},ft+' min free after fixed blocks.')));
-  const ti=h('input',{class:'grow',placeholder:'Meal, class, gym…','aria-label':'Fixed block title'}),fs=h('input',{type:'time',value:'13:00','aria-label':'Fixed block start'}),fm=h('input',{type:'number',min:5,max:600,step:5,value:30,class:'num','aria-label':'Fixed block minutes'});
-  w.append(h('div',{class:'card'},h('h3',{},'Add fixed block'),h('p',{class:'mut small'},'Meals, sleep, classes. Planned blocks fit around these.'),
-    h('div',{class:'form'},ti,fs,fm,h('span',{class:'small mut'},'min'),
-      h('button',{class:'btn fill',onclick:()=>{
-        const t=ti.value.trim(),m=+fm.value;
-        if(!t||!fs.value||!(m>0)){toast('Add a title, a start time and minutes.');return;}
-        dpl=null;add('blocks',{day:d,start:fs.value,mins:m,kind:'fixed',title:t,done:0});
-      }},'Add fixed block'))));
-  w.append(h('div',{class:'card'},h('div',{class:'row sb'},h('div',{},h('h3',{},'Plan the day'),h('div',{class:'mut small'},'Fills free time with focus blocks, breaks and routines. Nothing is saved until you apply.')),
-    h('button',{class:'btn s fill',onclick:()=>{dpl={day:d,r:fill(d,td)};render();}},I('spark'),'Propose plan'))));
+        d!==td?h('button',{class:'btn s',onclick:()=>{dsel=td;dpl=null;bkEd=null;render();}},'Today'):null)),
+    h('div',{class:'row t'},h('button',{class:'btn s fill',onclick:()=>{dpl={day:d,r:fill(d,td)};render();}},I('spark'),'Propose plan'),
+      h('span',{class:'mut small'},'Nothing is saved until you apply.'))));
   const pc=dpCard(d);if(pc)w.append(pc);
-  w.append(shiftCard(d));
-  w.append(h('div',{class:'card'},h('h3',{},'Timeline'),tl(d)));
+  w.append(h('div',{class:'card'},tl(d)));
+  const oc=odCard();if(oc)w.append(oc);
+  const st=h('input',{type:'time',value:win.start,'aria-label':'Day starts'}),en=h('input',{type:'time',value:win.end,'aria-label':'Day ends'});
+  const ti=h('input',{class:'grow',placeholder:'Meal, class, gym…','aria-label':'Fixed block title'}),fs=h('input',{type:'time',value:'13:00','aria-label':'Fixed block start'}),fm=h('input',{type:'number',min:5,max:600,step:5,value:30,class:'num','aria-label':'Fixed block minutes'});
+  w.append(dt('ed','more',h('summary',{},'Edit this day'),h('div',{class:'wrap'},
+    h('div',{class:'card'},h('h3',{},'Day window'),
+      h('div',{class:'form'},h('label',{class:'small mut'},'Start ',st),h('label',{class:'small mut'},'End ',en),
+        h('button',{class:'btn s fill',onclick:()=>saveWin(d,st.value,en.value)},'Save window')),
+      ft<0?h('p',{class:'ev',role:'status'},'Overloaded: fixed blocks are '+(-ft)+' min longer than this window. Shorten them or widen the window.')
+        :h('p',{class:'mut small'},ft+' min free after fixed blocks.')),
+    h('div',{class:'card'},h('h3',{},'Add fixed block'),h('p',{class:'mut small'},'Meals, sleep, classes. Planned blocks fit around these.'),
+      h('div',{class:'form'},ti,fs,fm,h('span',{class:'small mut'},'min'),
+        h('button',{class:'btn fill',onclick:()=>{
+          const t=ti.value.trim(),m=+fm.value;
+          if(!t||!fs.value||!(m>0)){toast('Add a title, a start time and minutes.');return;}
+          dpl=null;add('blocks',{day:d,start:fs.value,mins:m,kind:'fixed',title:t,done:0});
+        }},'Add fixed block'))),
+    shiftCard(d))));
+  w.append(weekCard());
   return w;
 }
 
@@ -1648,7 +1554,7 @@ let cOpen=(()=>{try{return localStorage.getItem('chatc')!=='1';}catch(e){return 
 const csave=()=>{try{localStorage.setItem('chat',JSON.stringify(CH.slice(-40)));}catch(e){}};
 const wide=matchMedia('(min-width:1024px)');
 const cl=h('div',{class:'cl'});
-const cta=h('textarea',{id:'cin',rows:2,placeholder:'Ask about your plan, for example: move Revise: Trees to Friday…'});
+const cta=h('textarea',{id:'cin',rows:2,placeholder:'Ask about your plan, for example: move my DBMS lab sheet to Friday…'});
 const cer=h('div',{class:'cer',role:'status'});
 const csb=h('button',{class:'btn fill s',type:'submit'},I('send'),'Send');
 const cx=h('button',{class:'x',onclick:()=>cclose()});
@@ -1683,7 +1589,6 @@ function al(a){
   if(a.op==='delete_task')return'Delete '+tn;
   if(a.op==='add_task')return'Add task "'+a.title+'"'+(a.course_id?' for '+cname(a.course_id):'')+(a.due?', due '+fd(a.due):'');
   if(a.op==='add_quiz')return'Add quiz "'+a.title+'" for '+cname(a.course_id)+' on '+fd(a.date)+', covering '+(a.topic_ids||[]).length+' topics';
-  if(a.op==='replan_course'){const l=lim(a.course_id);return'Spread open revision for '+cname(a.course_id)+' from today to '+(l?fd(l<today()?today():l):'the exam');}
   if(a.op==='add_today')return'Add "'+a.title+'" to Today';
   return a.op;
 }
@@ -1722,7 +1627,6 @@ async function cdo(a,nt){
   if(a.op==='delete_task'){if(!t)return 0;await api('DELETE','tasks/'+a.id);return 1;}
   if(a.op==='add_task'){await api('POST','tasks',{title:a.title,course_id:a.course_id||null,kind:'todo',due:a.due?cap(a.course_id,a.due):null});return 1;}
   if(a.op==='add_quiz'){const r=await api('POST','quizzes',{course_id:a.course_id,title:a.title,date:a.date});if(r&&r.id&&a.topic_ids&&a.topic_ids.length)await api('POST','qt',a.topic_ids.map(id=>({quiz_id:r.id,topic_id:id})));return 1;}
-  if(a.op==='replan_course'){await load();const p=mkRp('c:'+a.course_id);if(!p)return 0;await Promise.all(p.mv.filter(m=>m.t.due!==m.d).map(m=>api('PATCH','tasks/'+m.t.id,{due:m.d})));if(p.warn)nt.push(p.warn);return 1;}
   if(a.op==='add_today'){await load();if(tdy().length>=3){nt.push('Today already had 3, so "'+a.title+'" was skipped.');return 0;}await api('POST','today',{day:today(),title:a.title,sort:tdy().length,done:0});return 1;}
   return 0;
 }
