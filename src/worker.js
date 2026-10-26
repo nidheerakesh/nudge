@@ -201,6 +201,18 @@ export default {
         return json(out);
       }
       if (req.method === 'POST' && p[1] === 'ai') return await ai(p, req, env, db);
+      if (p[1] === 'timer') {
+        if (req.method === 'GET') {
+          const r = await db.prepare('SELECT data FROM timer WHERE id=1').first();
+          return json(r ? JSON.parse(r.data) : null);
+        }
+        if (req.method === 'PUT') {
+          const b = await req.json();
+          const d = b && b.data && typeof b.data === 'object' ? b.data : { cleared: true, at: Date.now() };
+          await db.prepare('INSERT INTO timer(id,data) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data').bind(JSON.stringify(d)).run();
+          return json({ ok: 1 });
+        }
+      }
       const t = p[1];
       const cols = Object.hasOwn(T, t) ? T[t] : null;
       if (!cols) return json({ error: 'not found' }, 404);
