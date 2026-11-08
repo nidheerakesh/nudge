@@ -1,348 +1,134 @@
-const T = {
-  courses: ['name', 'date', 'time', 'kind'],
-  topics: ['course_id', 'title', 'done', 'mins', 'diff'],
-  days: ['day', 'start', 'end'],
-  blocks: ['day', 'start', 'mins', 'kind', 'title', 'ref_kind', 'ref_id', 'done'],
-  rounds: ['topic_id', 'done'],
-  tasks: ['course_id', 'title', 'kind', 'due', 'done', 'area_id', 'est', 'diff', 'done_at'],
-  quizzes: ['course_id', 'title', 'date', 'done'],
-  qt: ['quiz_id', 'topic_id'],
-  dump: ['text', 'done'],
-  rem: ['text', 'at', 'done'],
-  habits: ['name', 'area_id'],
-  hlog: ['habit_id', 'day'],
-  log: ['day', 'kind', 'text', 'mins'],
-  areas: ['name', 'color', 'sort'],
-  goals: ['area_id', 'title', 'why', 'done'],
-  steps: ['goal_id', 'title', 'done', 'sort'],
-  today: ['day', 'ref_kind', 'ref_id', 'title', 'sort', 'done'],
-  routines: ['name', 'part'],
-  rsteps: ['routine_id', 'title', 'sort'],
-  rlog: ['rstep_id', 'day'],
-  notes: ['area_id', 'text'],
-  sessions: ['day', 'start_at', 'start', 'plan_mins', 'act_mins', 'pauses', 'end_kind', 'rating', 'ref_kind', 'ref_id', 'diff'],
-  prefs: ['k', 'v']
-};
+import { checkOrigin, signup, login, logout, getUser, changePassword, deleteAccount, verifyPassword, sessionCookie, clearCookie } from './auth.js';
+import { insert, patch, remove, all, exportAll, setPrefs, getTimer, putTimer } from './db.js';
+import { ask } from './coach.js';
 
-const DF = ['easy', 'medium', 'hard'];
-const fixDf = r => {
-  if (r.diff !== undefined && !DF.includes(r.diff)) r.diff = 'medium';
-};
+const MAXBODY = 256 * 1024;
 
-const M = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+function json(data, status = 200, headers = {}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...headers },
+  });
+}
 
-const ask = async (env, sys, u) => {
-  const r = await env.AI.run(M, { messages: [{ role: 'system', content: sys }, { role: 'user', content: u }] });
-  if (r && Array.isArray(r.response)) return r.response;
-  const x = typeof (r && r.response) === 'object' ? JSON.stringify(r.response) : String((r && r.response) || '');
-  const a = x.indexOf('['), z = x.lastIndexOf(']');
-  if (a >= 0 && z > a) {
-    try {
-      const v = JSON.parse(x.slice(a, z + 1));
-      if (Array.isArray(v)) return v;
-    } catch (e) {}
-  }
-  return x.split('\n').map(l => l.replace(/^[\s\-*\d.)]+/, '').trim()).filter(Boolean);
-};
+const fail = (status, error) => ({ status, error });
 
-const isD = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && new Date(d + 'T00:00:00Z').toISOString().slice(0, 10) === d;
-const ad = (d, k) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + k); return x.toISOString().slice(0, 10); };
-
-const SYS = td => 'You are Nudge, a calm study planner for a student. Today is ' + td + '. ' +
-  'You get their data as JSON: courses are exams (date = exam day, last = last day revision may be scheduled), topics per course in syllabus order [id,title,done], open tasks [id,title,course_id,due], quizzes, and today (max 3 priorities). ' +
-  'Rule: a task with a course_id must be due no later than that course\'s "last" day. Never schedule before today. "First half" of a course means the first ceil(n/2) topics in listed order. ' +
-  'Reply with ONLY a JSON object {"reply": string, "actions": [...]} and nothing else. reply is short, friendly, plain text. ' +
-  'actions are proposals the user confirms, use [] when nothing should change. Allowed: ' +
-  '{"op":"move_task","id":N,"due":"YYYY-MM-DD"}, {"op":"done_task","id":N}, {"op":"add_task","title":S,"course_id":N|null,"due":"YYYY-MM-DD"}, ' +
-  '{"op":"delete_task","id":N}, {"op":"add_quiz","course_id":N,"title":S,"date":"YYYY-MM-DD","topic_ids":[N]}, {"op":"replan_course","course_id":N}, {"op":"add_today","title":S}, ' +
-  '{"op":"remember","text":S} (a short lasting fact about the student), {"op":"set_pref","key":"day_start"|"day_end","value":"HH:MM"} or {"op":"set_pref","key":"max_focus","value":15-120}. ' +
-  'Use only ids from the data. For a quiz, add it and move the Revise tasks for its topics to days before the quiz. ' +
-  'The data has "profile" (what the app learned about when and how long the student focuses, from their own sessions) and "memory" (facts to remember). Use them to give personal advice and never invent numbers. You do not place study blocks, the app does.';
-
-const chat = async (b, env, db) => {
-  const td = isD(b.day) ? b.day : new Date().toISOString().slice(0, 10);
-  const ms = (Array.isArray(b.messages) ? b.messages : [])
-    .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
-    .slice(-12).map(m => ({ role: m.role, content: m.content.slice(0, 4000) }));
-  if (!ms.length || ms[ms.length - 1].role !== 'user') return json({ error: 'messages' }, 400);
-  const rs = await db.batch([
-    db.prepare('SELECT id, name, date, kind FROM courses ORDER BY id'),
-    db.prepare('SELECT id, course_id, title, done FROM topics ORDER BY id'),
-    db.prepare('SELECT id, title, course_id, due FROM tasks WHERE done=0 ORDER BY due IS NULL, due, id LIMIT 200'),
-    db.prepare('SELECT id, course_id, title, date, done FROM quizzes ORDER BY id'),
-    db.prepare('SELECT title, done FROM today WHERE day=? ORDER BY sort, id').bind(td),
-    db.prepare("SELECT v FROM prefs WHERE k='memory'")
-  ]);
-  const [cs, tp, tk, qz, tdy, mem] = rs.map(r => r.results);
-  let memory = [];
-  try { const m = JSON.parse(mem[0] && mem[0].v); if (Array.isArray(m)) memory = m.map(x => String(x).slice(0, 200)).slice(-20); } catch (e) {}
-  const prof = b.profile && typeof b.profile === 'object' && !Array.isArray(b.profile) && JSON.stringify(b.profile).length <= 800 ? b.profile : null;
-  const C = new Map(cs.map(c => [c.id, c])), K = new Map(tk.map(t => [t.id, t])), TP = new Map(tp.map(t => [t.id, t]));
-  const ctx = {
-    courses: cs.map(c => ({ id: c.id, name: c.name, exam: c.date, last: c.date ? ad(c.date, -1) : null })),
-    topics: Object.fromEntries(cs.map(c => [c.id, tp.filter(t => t.course_id === c.id).map(t => [t.id, t.title, t.done])])),
-    tasks: tk.map(t => [t.id, t.title, t.course_id, t.due]),
-    quizzes: qz.filter(q => !q.done).map(q => ({ id: q.id, course_id: q.course_id, title: q.title, date: q.date })),
-    today: tdy.map(t => t.title + (t.done ? ' (done)' : '')),
-    profile: prof,
-    memory
-  };
-  const r = await env.AI.run(M, { messages: [{ role: 'system', content: SYS(td) + '\nData: ' + JSON.stringify(ctx) }, ...ms], max_tokens: 1500 });
-  const x = typeof (r && r.response) === 'object' ? JSON.stringify(r.response) : String((r && r.response) || '');
-  let o = null;
-  const a = x.indexOf('{'), z = x.lastIndexOf('}');
-  if (a >= 0 && z > a) try { o = JSON.parse(x.slice(a, z + 1)); } catch (e) {}
-  if (!o || typeof o !== 'object' || Array.isArray(o)) o = { reply: x.trim(), actions: [] };
-  const rp = String(o.reply || '').trim();
-  if (!rp && !Array.isArray(o.actions)) throw new Error('empty');
-  const nt = [], out = [];
-  const nm = t => '"' + t.title + '"';
-  const cap = (cid, d, lab) => {
-    const c = C.get(cid);
-    if (!c || !c.date) return d;
-    const l = ad(c.date, -1);
-    if (d <= l) return d;
-    if (l < td) { nt.push(lab + ' kept on today, but the ' + c.name + ' exam is today or past.'); return td; }
-    nt.push(lab + ' moved to ' + l + ', the day before the ' + c.name + ' exam.');
-    return l;
-  };
-  const okD = (d, lab) => { if (isD(d) && d >= td) return true; nt.push('Dropped ' + lab + ': date ' + (d || 'missing') + ' is not today or later.'); return false; };
-  let ntd = tdy.length;
-  for (const v of (Array.isArray(o.actions) ? o.actions : []).slice(0, 30)) {
-    if (!v || typeof v !== 'object') continue;
-    const op = v.op, id = Number(v.id), t = K.get(id);
-    if (op === 'move_task' || op === 'done_task' || op === 'delete_task') {
-      if (!t) { nt.push('Dropped a change to unknown task ' + v.id + '.'); continue; }
-      if (op !== 'move_task') { out.push({ op, id }); continue; }
-      if (!okD(v.due, 'moving ' + nm(t))) continue;
-      const d = cap(t.course_id, v.due, nm(t));
-      if (d !== t.due) out.push({ op, id, due: d });
-    } else if (op === 'add_task') {
-      const ti = String(v.title || '').trim().slice(0, 200), cid = v.course_id == null || v.course_id === '' ? null : Number(v.course_id);
-      if (!ti) continue;
-      if (cid !== null && !C.has(cid)) { nt.push('Dropped "' + ti + '": unknown course.'); continue; }
-      let d = v.due == null || v.due === '' ? null : v.due;
-      if (d !== null) { if (!okD(d, '"' + ti + '"')) continue; d = cap(cid, d, '"' + ti + '"'); }
-      out.push({ op, title: ti, course_id: cid, due: d });
-    } else if (op === 'add_quiz') {
-      const cid = Number(v.course_id), ti = String(v.title || '').trim().slice(0, 200);
-      if (!C.has(cid) || !ti) { nt.push('Dropped a quiz with an unknown course or no title.'); continue; }
-      if (!okD(v.date, 'quiz "' + ti + '"')) continue;
-      if (qz.some(q => q.course_id === cid && (q.date === v.date || q.title.toLowerCase() === ti.toLowerCase()))) { nt.push('Skipped quiz "' + ti + '": that quiz already exists.'); continue; }
-      const ids = [...new Set((Array.isArray(v.topic_ids) ? v.topic_ids : []).map(Number))].filter(i => TP.has(i) && TP.get(i).course_id === cid);
-      out.push({ op, course_id: cid, title: ti, date: v.date, topic_ids: ids });
-    } else if (op === 'replan_course') {
-      const c = C.get(Number(v.course_id));
-      if (!c || !c.date) { nt.push('Dropped a replan for a course without an exam date.'); continue; }
-      if (ad(c.date, -1) < td) nt.push('The ' + c.name + ' exam is today or past, so its revision stays on today.');
-      out.push({ op, course_id: c.id });
-    } else if (op === 'add_today') {
-      const ti = String(v.title || '').trim().slice(0, 200);
-      if (!ti) continue;
-      if (ntd >= 3) { nt.push('Today already has 3 priorities, so "' + ti + '" was left out.'); continue; }
-      ntd++;
-      out.push({ op, title: ti });
-    } else if (op === 'remember') {
-      const tx = String(v.text || '').trim().slice(0, 200);
-      if (tx) out.push({ op, text: tx });
-    } else if (op === 'set_pref') {
-      const k = v.key, val = v.value, hm = x => typeof x === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(x);
-      if ((k === 'day_start' || k === 'day_end') && hm(val)) out.push({ op, key: k, value: val });
-      else if (k === 'max_focus' && Number.isInteger(Number(val)) && Number(val) >= 15 && Number(val) <= 120) out.push({ op, key: k, value: Number(val) });
-      else nt.push('Dropped an invalid preference change.');
-    } else nt.push('Dropped an unsupported action.');
-  }
-  return json({ reply: (rp || 'Here is what I suggest.') + (nt.length ? '\n\nNote: ' + nt.join(' ') : ''), actions: out });
-};
-
-const ai = async (p, req, env, db) => {
-  const b = (await req.json().catch(() => ({}))) || {};
+async function readBody(request) {
+  const raw = await request.text();
+  if (raw.length > MAXBODY) throw fail(413, 'too_big');
+  if (!raw.trim()) return {};
   try {
-    if (p[2] === 'chat') return await chat(b, env, db);
-    if (p[2] === 'breakdown') {
-      if (!b || !b.title) return json({ error: 'title' }, 400);
-      const v = await ask(
-        env,
-        'Break the task into 3 to 7 tiny concrete steps, each under 10 words. The first step must take under 5 minutes. Reply with only a JSON array of strings.',
-        String(b.title)
-      );
-      const st = v.map(x => (typeof x === 'string' ? x : x && (x.step || x.title)) || '').map(x => String(x).trim()).filter(Boolean).slice(0, 7);
-      if (!st.length) return json({ error: 'empty' }, 502);
-      return json({ steps: st });
-    }
-    if (p[2] === 'plan') {
-      const rs = await db.batch([
-        db.prepare('SELECT id, title, due FROM tasks WHERE done=0 ORDER BY due IS NULL, due, id LIMIT 40'),
-        db.prepare('SELECT s.id, s.title, g.title AS goal FROM steps s JOIN goals g ON g.id=s.goal_id WHERE s.done=0 AND g.done=0 ORDER BY s.sort, s.id LIMIT 40'),
-        db.prepare('SELECT id, text FROM dump WHERE done=0 ORDER BY id LIMIT 40')
-      ]);
-      const c = {};
-      const ls = [];
-      rs[0].results.forEach(r => { c['task:' + r.id] = r.title; ls.push({ ref_kind: 'task', ref_id: r.id, title: r.title, due: r.due }); });
-      rs[1].results.forEach(r => { c['step:' + r.id] = r.title; ls.push({ ref_kind: 'step', ref_id: r.id, title: r.title, goal: r.goal }); });
-      rs[2].results.forEach(r => { c['dump:' + r.id] = r.text; ls.push({ ref_kind: 'dump', ref_id: r.id, title: r.text }); });
-      if (!ls.length) return json({ picks: [] });
-      const v = await ask(
-        env,
-        'You help a student pick at most 3 things to do today. Reply with only a JSON array of objects {"ref_kind","ref_id","why"} where why is under 12 words. Use only items from the list.',
-        'Today: ' + String(b.day || '') + '\nItems:\n' + JSON.stringify(ls)
-      );
-      const seen = new Set();
-      const pk = [];
-      for (const x of v) {
-        if (!x || typeof x !== 'object') continue;
-        const k = x.ref_kind + ':' + Number(x.ref_id);
-        if (!(k in c) || seen.has(k)) continue;
-        seen.add(k);
-        pk.push({ ref_kind: x.ref_kind, ref_id: Number(x.ref_id), title: c[k], why: String(x.why || '') });
-        if (pk.length === 3) break;
-      }
-      return json({ picks: pk });
-    }
-  } catch (e) {
-    return json({ error: String(e && e.message ? e.message : e) }, 502);
+    return JSON.parse(raw);
+  } catch {
+    throw fail(400, 'json');
   }
-  return json({ error: 'not found' }, 404);
-};
+}
 
-const json = (d, s = 200) =>
-  new Response(JSON.stringify(d), { status: s, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+const AUTHERR = { invalid_email: 400, weak_password: 400, exists: 409 };
+
+async function authRoute(env, request, path, body) {
+  if (path === '/api/auth/signup') {
+    const res = await signup(env.DB, body || {});
+    if (res.error) return json({ error: res.error }, AUTHERR[res.error] || 400);
+    return json({ user: res.user }, 200, { 'set-cookie': sessionCookie(res.token) });
+  }
+  const res = await login(env.DB, body || {});
+  if (res.error === 'locked') return json({ error: 'locked', retry: res.retry }, 429);
+  if (res.error) return json({ error: 'invalid' }, 401);
+  return json({ user: res.user }, 200, { 'set-cookie': sessionCookie(res.token) });
+}
+
+function todayOf(request) {
+  const h = request.headers.get('x-today') || '';
+  return /^\d{4}-\d{2}-\d{2}$/.test(h) ? h : new Date().toISOString().slice(0, 10);
+}
+
+async function coach(env, request, u, body) {
+  const ms = body && body.messages;
+  if (!Array.isArray(ms) || !ms.length || ms.length > 20) throw fail(400, 'messages');
+  for (const m of ms) {
+    if (!m || (m.role !== 'user' && m.role !== 'assistant') || typeof m.content !== 'string' || m.content.length > 2000) throw fail(400, 'messages');
+  }
+  const msgs = ms.map((m) => ({ role: m.role, content: m.content }));
+  const data = await all(env.DB, u.id);
+  try {
+    return json(await ask(env, data, msgs, todayOf(request)));
+  } catch (e) {
+    console.error('ai', e && e.message);
+    throw fail(502, 'ai');
+  }
+}
+
+async function route(env, request, u, path, body) {
+  const m = request.method;
+  const parts = path.split('/').slice(2);
+  const [a, b] = parts;
+  if (path === '/api/me' && m === 'GET') return json({ user: u });
+  if (path === '/api/auth/logout' && m === 'POST') {
+    await logout(env.DB, request);
+    return json({ ok: 1 }, 200, { 'set-cookie': clearCookie() });
+  }
+  if (path === '/api/auth/password' && m === 'POST') {
+    const res = await changePassword(env.DB, u.id, body && body.old, body && body.new);
+    return res.error ? json({ error: res.error }, 400) : json(res);
+  }
+  if (path === '/api/auth/delete' && m === 'POST') {
+    const row = await env.DB.prepare('SELECT pw_hash, salt FROM users WHERE id=?').bind(u.id).first();
+    const pw = String((body && body.password) || '');
+    if (!row || !(await verifyPassword(pw, row.pw_hash, row.salt))) return json({ error: 'invalid' }, 400);
+    await deleteAccount(env.DB, u.id);
+    return json({ ok: 1 }, 200, { 'set-cookie': clearCookie() });
+  }
+  if (path === '/api/all' && m === 'GET') return json(await all(env.DB, u.id));
+  if (path === '/api/export' && m === 'GET') {
+    return json(await exportAll(env.DB, u.id), 200, { 'content-disposition': 'attachment; filename="nudge-export.json"' });
+  }
+  if (path === '/api/prefs' && m === 'PUT') {
+    await setPrefs(env.DB, u.id, body);
+    return json({ ok: 1 });
+  }
+  if (path === '/api/timer') {
+    if (m === 'GET') return json({ data: await getTimer(env.DB, u.id) });
+    if (m === 'PUT') {
+      await putTimer(env.DB, u.id, body ? body.data : null);
+      return json({ ok: 1 });
+    }
+  }
+  if (path === '/api/coach' && m === 'POST') return coach(env, request, u, body);
+  if (parts.length === 1 && m === 'POST') return json({ rows: await insert(env.DB, u.id, a, body) });
+  if (parts.length === 2 && /^\d+$/.test(b)) {
+    const id = Number(b);
+    if (m === 'PATCH') return json({ row: await patch(env.DB, u.id, a, id, body) });
+    if (m === 'DELETE') {
+      await remove(env.DB, u.id, a, id);
+      return json({ ok: 1 });
+    }
+  }
+  throw fail(404, 'not_found');
+}
+
+async function handle(request, env) {
+  const path = new URL(request.url).pathname;
+  if (!checkOrigin(request)) return json({ error: 'bad_origin' }, 403);
+  const m = request.method;
+  const body = m === 'POST' || m === 'PUT' || m === 'PATCH' ? await readBody(request) : null;
+  if (m === 'POST' && (path === '/api/auth/signup' || path === '/api/auth/login')) return authRoute(env, request, path, body);
+  const u = await getUser(env.DB, request);
+  if (!u) return json({ error: 'auth' }, 401);
+  return route(env, request, u, path, body);
+}
 
 export default {
-  async fetch(req, env) {
-    const url = new URL(req.url);
-    const p = url.pathname.split('/').filter(Boolean);
-    if (p[0] !== 'api') return env.ASSETS.fetch(req);
-    if (env.PIN && req.headers.get('x-pin') !== env.PIN) return json({ error: 'pin' }, 401);
-    const db = env.DB;
+  async fetch(request, env) {
+    const path = new URL(request.url).pathname;
+    if (path !== '/api' && !path.startsWith('/api/')) return env.ASSETS.fetch(request);
     try {
-      if (req.method === 'GET' && p[1] === 'all') {
-        const names = Object.keys(T);
-        const rs = await db.batch(
-          names.map(t =>
-            db.prepare(
-              'SELECT * FROM ' + t + (t === 'sessions' ? " WHERE day>=date('now','-90 day')" : '') + ' ORDER BY id'
-            )
-          )
-        );
-        const out = {};
-        names.forEach((t, i) => (out[t] = rs[i].results));
-        return json(out);
-      }
-      if (req.method === 'POST' && p[1] === 'ai') return await ai(p, req, env, db);
-      if (req.method === 'POST' && p[1] === 'memory') {
-        const b = await req.json();
-        const s = b && typeof b.text === 'string' ? b.text.trim().slice(0, 200) : '';
-        if (!s) return json({ error: 'text' }, 400);
-        await db.batch([
-          db.prepare("INSERT OR IGNORE INTO prefs(k,v) VALUES('memory','[]')"),
-          db.prepare("UPDATE prefs SET v=json_insert(CASE WHEN json_valid(v) THEN v ELSE '[]' END,'$[#]',?) WHERE k='memory'").bind(s),
-          db.prepare("UPDATE prefs SET v=json_remove(v,'$[0]') WHERE k='memory' AND json_array_length(v)>20")
-        ]);
-        return json({ ok: 1 });
-      }
-      if (p[1] === 'timer') {
-        if (req.method === 'GET') {
-          const r = await db.prepare('SELECT data FROM timer WHERE id=1').first();
-          return json(r ? JSON.parse(r.data) : null);
-        }
-        if (req.method === 'PUT') {
-          const b = await req.json();
-          const d = b && b.data && typeof b.data === 'object' ? b.data : { cleared: true, at: Date.now() };
-          await db.prepare('INSERT INTO timer(id,data) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data').bind(JSON.stringify(d)).run();
-          return json({ ok: 1 });
-        }
-      }
-      const t = p[1];
-      const cols = Object.hasOwn(T, t) ? T[t] : null;
-      if (!cols) return json({ error: 'not found' }, 404);
-      const id = p[2] ? Number(p[2]) : null;
-
-      if (req.method === 'POST') {
-        const b = await req.json();
-        const rows = Array.isArray(b) ? b : [b];
-        if (!rows.length || rows.some(r => !r || typeof r !== 'object' || Array.isArray(r))) return json({ error: 'row' }, 400);
-        const sts = rows.map(r => {
-          fixDf(r);
-          const k = cols.filter(c => r[c] !== undefined);
-          const sql =
-            'INSERT ' + (t === 'hlog' || t === 'rlog' ? 'OR IGNORE ' : '') + 'INTO ' + t +
-            '(' + k.join(',') + ') VALUES(' + k.map(() => '?').join(',') + ')' +
-            (t === 'prefs' && k.includes('k') ? ' ON CONFLICT(k) DO UPDATE SET v=excluded.v' : '');
-          return db.prepare(sql).bind(...k.map(c => r[c]));
-        });
-        const rs = await db.batch(sts);
-        return json({ id: rs[rs.length - 1].meta.last_row_id });
-      }
-
-      if (req.method === 'PATCH' && id) {
-        const b = await req.json();
-        if (!b || typeof b !== 'object') return json({ error: 'row' }, 400);
-        fixDf(b);
-        const k = cols.filter(c => b[c] !== undefined);
-        const st = [];
-        const once = t === 'sessions' && b.end_kind !== undefined;
-        if (k.length)
-          st.push(
-            db
-              .prepare(
-                'UPDATE ' + t + ' SET ' + k.map(c => c + '=?').join(',') + ' WHERE id=?' +
-                  (once ? " AND end_kind IN ('open','abandoned')" : '')
-              )
-              .bind(...k.map(c => b[c]), id)
-          );
-        if (t === 'quizzes' && b.done === 1)
-          st.push(
-            db
-              .prepare('UPDATE topics SET done=1 WHERE id IN (SELECT topic_id FROM qt WHERE quiz_id=?)')
-              .bind(id)
-          );
-        const rs = st.length ? await db.batch(st) : [];
-        return json({ ok: 1, n: rs.length ? rs[0].meta.changes : 0 });
-      }
-
-      if (req.method === 'DELETE') {
-        if (t === 'hlog' && !id) {
-          const hid = Number(url.searchParams.get('habit_id'));
-          const day = url.searchParams.get('day');
-          await db.prepare('DELETE FROM hlog WHERE habit_id=? AND day=?').bind(hid, day).run();
-          return json({ ok: 1 });
-        }
-        if (t === 'rlog' && !id) {
-          const rid = Number(url.searchParams.get('rstep_id'));
-          const day = url.searchParams.get('day');
-          await db.prepare('DELETE FROM rlog WHERE rstep_id=? AND day=?').bind(rid, day).run();
-          return json({ ok: 1 });
-        }
-        if (!id) return json({ error: 'id' }, 400);
-        const st = [];
-        if (t === 'courses') {
-          st.push(db.prepare('DELETE FROM qt WHERE quiz_id IN (SELECT id FROM quizzes WHERE course_id=?)').bind(id));
-          st.push(db.prepare('DELETE FROM qt WHERE topic_id IN (SELECT id FROM topics WHERE course_id=?)').bind(id));
-          st.push(db.prepare('DELETE FROM rounds WHERE topic_id IN (SELECT id FROM topics WHERE course_id=?)').bind(id));
-          st.push(db.prepare('DELETE FROM topics WHERE course_id=?').bind(id));
-          st.push(db.prepare('DELETE FROM tasks WHERE course_id=?').bind(id));
-          st.push(db.prepare('DELETE FROM quizzes WHERE course_id=?').bind(id));
-        }
-        if (t === 'topics') st.push(db.prepare('DELETE FROM qt WHERE topic_id=?').bind(id));
-        if (t === 'topics') st.push(db.prepare('DELETE FROM rounds WHERE topic_id=?').bind(id));
-        if (t === 'quizzes') st.push(db.prepare('DELETE FROM qt WHERE quiz_id=?').bind(id));
-        if (t === 'habits') st.push(db.prepare('DELETE FROM hlog WHERE habit_id=?').bind(id));
-        if (t === 'goals') st.push(db.prepare('DELETE FROM steps WHERE goal_id=?').bind(id));
-        if (t === 'routines') {
-          st.push(db.prepare('DELETE FROM rlog WHERE rstep_id IN (SELECT id FROM rsteps WHERE routine_id=?)').bind(id));
-          st.push(db.prepare('DELETE FROM rsteps WHERE routine_id=?').bind(id));
-        }
-        if (t === 'rsteps') st.push(db.prepare('DELETE FROM rlog WHERE rstep_id=?').bind(id));
-        if (t === 'areas')
-          ['tasks', 'habits', 'goals', 'notes'].forEach(x => st.push(db.prepare('UPDATE ' + x + ' SET area_id=NULL WHERE area_id=?').bind(id)));
-        st.push(db.prepare('DELETE FROM ' + t + ' WHERE id=?').bind(id));
-        await db.batch(st);
-        return json({ ok: 1 });
-      }
-      return json({ error: 'bad request' }, 400);
+      return await handle(request, env);
     } catch (e) {
-      return json({ error: String(e && e.message ? e.message : e) }, 500);
+      if (e && e.status && e.error) return json({ error: e.error }, e.status);
+      if (e && /constraint/i.test(String(e.message))) return json({ error: 'invalid' }, 400);
+      console.error('server', e && e.message);
+      return json({ error: 'server' }, 500);
     }
-  }
+  },
 };
