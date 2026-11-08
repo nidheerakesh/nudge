@@ -23,6 +23,8 @@ const mk = (w, h) => {
 };
 
 const clampI = (v, n) => Math.max(1, Math.min(n, (v | 0) || 1));
+const ACC_ART = { hairclip: 'clip', hairbow: 'bow', flowercrown: 'crown' };
+
 const nameOf = (id, def) => {
   const s = String(id || '');
   const n = s.includes(':') ? s.split(':')[1] : s;
@@ -99,7 +101,7 @@ function layers(ctx, look, fr, d, withBody) {
   } else put(ctx, hs + '.back', hx, hy, o);
   put(ctx, 'head.' + d, 2 + hx, 3 + hy, o);
   put(ctx, hs + '.front', hx, hy, o);
-  const acc = nameOf(look.accessory, '');
+  const acc = ACC_ART[nameOf(look.accessory, '')] || nameOf(look.accessory, '');
   if (acc) put(ctx, 'acc.' + acc + '.' + d, hx, hy, o);
   if (withBody && fr.prop) put(ctx, fr.prop.id, fr.prop.x, fr.prop.y, o);
 }
