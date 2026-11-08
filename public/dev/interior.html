@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nudge interior preview</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<script>try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="stylesheet" href="/css/app.css">
+<style>
+body{padding:12px 16px}
+#bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+#bar label{display:flex;align-items:center;gap:6px;font-size:13px}
+#bar input,#bar button{width:auto;min-height:36px}
+.grid{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:16px}
+.cell{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted)}
+canvas.room{image-rendering:pixelated;border:1px solid var(--line);background:#222}
+#msg{font-size:12px;color:var(--muted);margin-top:8px}
+</style>
+</head>
+<body>
+<h1>Nudge interior preview</h1>
+<div id="bar"></div>
+<div id="out"></div>
+<div id="msg"></div>
+<script type="module">
+import loadAll from '/town/art/index.js';
+import { createInteriorScene, SIZES } from '/town/interior.js';
+
+const S = 3;
+const T = 16;
+const el = (t, a, ...k) => {
+  const n = document.createElement(t);
+  for (const key in a || {}) n.setAttribute(key, a[key]);
+  n.append(...k.filter((x) => x != null));
+  return n;
+};
+
+const FLOORS = ['wood', 'light', 'tile', 'carpet'];
+const WALLS = ['cream', 'pink', 'flowers', 'leaves', 'checker', 'stars'];
+const FURN = ['desk', 'chair', 'bed', 'bookshelf', 'rug', 'plant', 'lamp', 'window', 'poster', 'petbed', 'globe', 'books', 'clock', 'candle', 'stool', 'beanbag', 'cushion', 'catplush', 'chest', 'stringlights', 'frame', 'guitar', 'bigplant', 'fishtank'].map((n) => 'furn:' + n);
+const LOOK = { skin: 2, hair: 3, hair_color: 4, outfit: 'outfit:hoodie', accessory: null };
+const SAMPLE = [
+  ['furn:window', 1, 0], ['furn:poster', 3, 0], ['furn:bed', 0, 1], ['furn:desk', 4, 3], ['furn:chair', 4, 2],
+  ['furn:lamp', 2, 1], ['furn:plant', 5, 1], ['furn:rug', 1, 4],
+];
+const st = { night: false, rooms: [] };
+
+function room(label, size, floor, wallpaper, list, edit) {
+  const [w, h] = SIZES[size];
+  const sc = createInteriorScene({ engine: null, house: { size, floor: 'floor:' + floor, wallpaper: 'wallpaper:' + wallpaper }, items: [], members: [], me: { name: 'you', look: LOOK } });
+  sc.editMode(true);
+  const refused = [];
+  for (const [id, x, y] of list) {
+    const r = sc.place(id, x, y);
+    if (!r.ok) refused.push(id + ':' + r.why);
+  }
+  sc.editMode(!!edit);
+  const cv = el('canvas', { class: 'room', width: w * T * S, height: h * T * S });
+  const cell = el('div', { class: 'cell' }, el('b', null, label), cv);
+  st.rooms.push({ sc, cv, w, h });
+  return { cell, sc, refused };
+}
+
+function fit(sc, ids) {
+  const left = [];
+  const [w, h] = [sc.size.w, sc.size.h];
+  sc.editMode(true);
+  for (const id of ids) {
+    let done = false;
+    const wall = /window|poster|clock|frame|stringlights/.test(id);
+    for (let y = wall ? 0 : 1; y < (wall ? 1 : h) && !done; y++) for (let x = 0; x < w && !done; x++) if (sc.place(id, x, y).ok) done = true;
+    if (!done) left.push(id);
+  }
+  return left;
+}
+
+function build() {
+  const out = document.getElementById('out');
+  const bad = [];
+  const sizes = el('div', { class: 'grid' });
+  for (const size of Object.keys(SIZES)) {
+    const r = room(size, size, 'wood', 'cream', SAMPLE.filter(([id, x, y]) => true));
+    sizes.append(r.cell);
+    if (r.refused.length) bad.push(size + ' ' + r.refused.join(','));
+  }
+  const looks = el('div', { class: 'grid' });
+  for (const f of FLOORS) for (const w of WALLS) {
+    const r = room(f + ' / ' + w, 'house:hut', f, w, [['furn:rug', 1, 2], ['furn:plant', 4, 3]]);
+    looks.append(r.cell);
+  }
+  const gallery = el('div', { class: 'grid' });
+  let left = FURN.slice();
+  let n = 1;
+  while (left.length && n < 6) {
+    const r = room('all furniture ' + n, 'house:manor', 'light', 'pink', []);
+    left = fit(r.sc, left);
+    r.sc.editMode(false);
+    gallery.append(r.cell);
+    n++;
+  }
+  if (left.length) bad.push('unplaced: ' + left.join(','));
+  const sitting = room('sit demo (desk + chair)', 'house:small', 'carpet', 'leaves', [['furn:desk', 4, 3], ['furn:chair', 4, 2], ['furn:plant', 6, 2]]);
+  sitting.sc.onTap(5, 2);
+  const test = el('div', { class: 'grid' }, sitting.cell);
+  out.replaceChildren(el('h2', null, 'House sizes'), sizes, el('h2', null, 'Floors x wallpapers'), looks, el('h2', null, 'All 24 furniture items'), gallery, el('h2', null, 'Sitting'), test);
+  document.getElementById('msg').textContent = bad.length ? 'refused: ' + bad.join(' | ') : 'all placements accepted';
+  return sitting.sc;
+}
+
+const bar = document.getElementById('bar');
+const night = el('input', { type: 'checkbox' });
+night.onchange = () => { st.night = night.checked; for (const r of st.rooms) r.sc.night = st.night; };
+bar.append(el('label', null, night, 'Night'));
+
+let sit = null;
+let t = 0;
+loadAll().then(() => {
+  sit = build();
+  setInterval(() => {
+    t += 0.125;
+    if (sit) for (let i = 0; i < 8; i++) sit.update(1 / 60);
+    for (const r of st.rooms) {
+      const ctx = r.cv.getContext('2d');
+      const off = r.off || (r.off = el('canvas', { width: r.w * T, height: r.h * T }));
+      const o = off.getContext('2d');
+      o.clearRect(0, 0, off.width, off.height);
+      r.sc.draw(o, { x: 0, y: 0 }, t);
+      ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0, 0, r.cv.width, r.cv.height);
+      ctx.drawImage(off, 0, 0, r.cv.width, r.cv.height);
+    }
+  }, 125);
+});
+</script>
+</body>
+</html>
