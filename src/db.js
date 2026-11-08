@@ -1,4 +1,5 @@
 import { awardForSession } from './town/coins.js';
+import { finishSession, creditCard } from './town/verify.js';
 
 export const TABLES = {
   courses: ['name', 'code', 'color', 'archived'],
@@ -74,11 +75,13 @@ export async function patch(db, uid, table, id, body) {
   if (!res.results.length) throw err(404, 'not_found');
   if (table === 'sessions' && (o.end_kind === 'done' || o.end_kind === 'stopped')) {
     try {
+      await finishSession(db, uid, id, Date.now());
       await awardForSession(db, uid, id);
     } catch (e) {
       console.error('award', e && e.message);
     }
   }
+  if (table === 'cards' && 'reps' in o) await creditCard(db, uid, Date.now()).catch(() => {});
   return strip(res.results[0]);
 }
 

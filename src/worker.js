@@ -2,6 +2,7 @@ import { checkOrigin, signup, login, logout, getUser, changePassword, deleteAcco
 import { insert, patch, remove, all, exportAll, setPrefs, getTimer, putTimer } from './db.js';
 import { ask } from './coach.js';
 import { townRoute } from './town/api.js';
+import { verifyRoute } from './town/verify.js';
 
 export { DistrictDO } from './town/district.js';
 export { HouseDO } from './town/house.js';
@@ -99,6 +100,7 @@ async function route(env, request, u, path, body) {
     }
   }
   if (path === '/api/coach' && m === 'POST') return coach(env, request, u, body);
+  if (path.startsWith('/api/focus/')) { const vr = await verifyRoute(request, env, u, new URL(request.url), body); if (vr) return vr; }
   const tr = await townRoute(env, request, u, path, body);
   if (tr) return tr;
   if (parts.length === 1 && m === 'POST') return json({ rows: await insert(env.DB, u.id, a, body) });
