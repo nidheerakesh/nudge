@@ -50,6 +50,15 @@ test('column and ref checks', async () => {
   await rej(patch(db, 2, 'tasks', t.id, { course_id: c.id }), 400, 'ref');
 });
 
+test('inherited names are not tables', async () => {
+  const db = setup();
+  for (const tb of ['constructor', 'toString']) {
+    await rej(insert(db, 1, tb, { a: 1 }), 404, 'table');
+    await rej(patch(db, 1, tb, 1, { a: 1 }), 404, 'table');
+    await rej(remove(db, 1, tb, 1), 404, 'table');
+  }
+});
+
 test('cascades', async () => {
   const db = setup();
   const [c] = await insert(db, 1, 'courses', { name: 'M' });
