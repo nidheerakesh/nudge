@@ -1,3 +1,4 @@
+import loadAll from '/town/art/index.js';
 import { createEngine } from '/town/engine.js';
 import { createTownScene } from '/town/scene.js';
 import { createInteriorScene } from '/town/interior.js';
@@ -10,9 +11,9 @@ import { createKnock, whyText } from '/town/ui/knock.js';
 import { createChat } from '/town/ui/chat.js';
 
 const PRESETS = [
-  { skin: 0, hair: 0, hair_color: 0 }, { skin: 1, hair: 1, hair_color: 1 }, { skin: 2, hair: 2, hair_color: 2 },
-  { skin: 3, hair: 3, hair_color: 3 }, { skin: 4, hair: 4, hair_color: 4 }, { skin: 5, hair: 5, hair_color: 5 },
-  { skin: 0, hair: 6, hair_color: 6 }, { skin: 3, hair: 7, hair_color: 7 },
+  { skin: 1, hair: 1, hair_color: 1 }, { skin: 2, hair: 2, hair_color: 2 }, { skin: 3, hair: 3, hair_color: 3 },
+  { skin: 4, hair: 4, hair_color: 4 }, { skin: 5, hair: 5, hair_color: 5 }, { skin: 6, hair: 6, hair_color: 6 },
+  { skin: 1, hair: 7, hair_color: 7 }, { skin: 4, hair: 8, hair_color: 8 },
 ];
 const SHOP_KINDS = ['boutique', 'homestore', 'bakery'];
 const PRESENCE_MS = 5000;
@@ -593,6 +594,7 @@ function mount(c0) {
       el.replaceChildren(h('div', { class: 'wrap' }, ui.empty('Could not load the town. Try again soon.')));
       return;
     }
+    try { await loadAll(); } catch (e) { /* art is optional, drawing falls back to nothing */ }
     if (dead()) return;
     if (!me.joined) welcome();
     else start();
