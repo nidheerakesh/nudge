@@ -10,6 +10,7 @@ const TABS = [
   ['tasks', 'Tasks', 'list'],
   ['study', 'Study', 'book'],
   ['focus', 'Focus', 'clock'],
+  ['town', 'Town', 'sparkle'],
   ['more', 'More', 'more'],
 ];
 const $ = id => document.getElementById(id);
