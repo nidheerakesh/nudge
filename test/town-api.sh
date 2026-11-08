@@ -47,15 +47,15 @@ want "A items out of bounds" "$(code $JA PUT /api/town/house/items '{"items":[{"
 want "A items dup" "$(code $JA PUT /api/town/house/items '{"items":[{"item_id":"furn:desk","x":1,"y":1},{"item_id":"furn:bed","x":1,"y":1}]}')" 400
 want "A items ok" "$(code $JA PUT /api/town/house/items '{"items":[{"item_id":"furn:desk","x":1,"y":1}]}')" 200
 
-# earn coins: an open session with 30 verified minutes, then end it
+# earn coins: an open session with 100 verified minutes, then end it
 r=$(req $JA POST /api/sessions '{"start_at":"2026-01-05T10:00:00Z"}'); SID=$(echo "$r" | jq .rows[0].id)
-$W d1 execute nudge-v3 --local -c wrangler.v3.toml --command "INSERT INTO session_active(session_id,user_id,started,last_ping,verified_secs,last_ok) VALUES($SID,1,0,0,1800,0)" >/dev/null
+$W d1 execute nudge-v3 --local -c wrangler.v3.toml --command "INSERT INTO session_active(session_id,user_id,started,last_ping,verified_secs,last_ok) VALUES($SID,1,0,0,6000,0)" >/dev/null
 r=$(req $JA PATCH /api/sessions/$SID '{"end_kind":"done"}')
 chk "session patch ok" "$r" '.row.end_kind=="done"'
 r=$(req $JA GET /api/town/me)
-chk "A earned coins" "$r" '.balance==30'
+chk "A earned coins" "$r" '.balance==100'
 r=$(req $JA POST /api/town/buy '{"item":"outfit:hoodie"}')
-chk "A buy ok" "$r" '.balance==undefined or .balance>=0'
+chk "A buy ok" "$r" ".balance==0"
 r=$(req $JA GET /api/town/me)
 chk "A owns hoodie" "$r" '.wardrobe|index("outfit:hoodie")!=null'
 want "A equip owned" "$(code $JA PUT /api/town/avatar '{"outfit":"outfit:hoodie"}')" 200

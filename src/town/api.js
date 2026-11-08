@@ -281,11 +281,12 @@ async function report(db, uid, body) {
   return { ok: 1 };
 }
 
-function wsReq(request, uid, nm) {
+function wsReq(request, uid, nm, extra = {}) {
   const h = new Headers();
   for (const [k, v] of request.headers) if (!k.toLowerCase().startsWith('x-')) h.set(k, v);
   h.set('x-uid', String(uid));
   h.set('x-name', encodeURIComponent(nm));
+  for (const k in extra) h.set(k, extra[k]);
   return new Request(request, { headers: h });
 }
 
@@ -301,7 +302,17 @@ async function wsDistrict(env, request, u, url) {
   if (!(await joined(env.DB, u.id))) return json({ error: 'join' }, 403);
   if ((await pref(env.DB, u.id, 'show_in_town')) === '0') return json({ error: 'hidden' }, 403);
   const stub = env.DISTRICT.get(env.DISTRICT.idFromName('d:' + d));
-  return stub.fetch(wsReq(request, u.id, await dname(env.DB, u.id)));
+  return stub.fetch(wsReq(request, u.id, await dname(env.DB, u.id), { 'x-district': String(d) }));
+}
+
+async function wsHall(env, request, u, url) {
+  if ((request.headers.get('upgrade') || '').toLowerCase() !== 'websocket') return json({ error: 'upgrade' }, 426);
+  const d = uid_(url.searchParams.get('district') ?? '');
+  if (d === null || d > 100000) return json({ error: 'district' }, 400);
+  if (!(await joined(env.DB, u.id))) return json({ error: 'join' }, 403);
+  if ((await pref(env.DB, u.id, 'show_in_town')) === '0') return json({ error: 'hidden' }, 403);
+  const stub = env.HOUSE.get(env.HOUSE.idFromName('hall:' + d));
+  return stub.fetch(wsReq(request, u.id, await dname(env.DB, u.id), { 'x-hall': '1' }));
 }
 
 async function wsHouse(env, request, u, owner) {
@@ -319,7 +330,7 @@ async function wsHouse(env, request, u, owner) {
     if (!ok) return json({ error: 'forbidden' }, 403);
   }
   const stub = env.HOUSE.get(env.HOUSE.idFromName('h:' + owner));
-  return stub.fetch(wsReq(request, u.id, await dname(db, u.id)));
+  return stub.fetch(wsReq(request, u.id, await dname(db, u.id), owner === u.id ? { 'x-owner': '1' } : {}));
 }
 
 async function inner(env, request, u, path, body) {
@@ -330,6 +341,7 @@ async function inner(env, request, u, path, body) {
   const [a, b, c] = p;
   const uid = u.id;
   if (a === 'ws' && p.length === 1 && m === 'GET') return wsDistrict(env, request, u, url);
+  if (a === 'hall' && b === 'ws' && p.length === 2 && m === 'GET') return wsHall(env, request, u, url);
   if (a === 'house' && c === 'ws' && p.length === 3 && m === 'GET') {
     const o = uid_(b);
     return o === null ? json({ error: 'user' }, 400) : wsHouse(env, request, u, o);

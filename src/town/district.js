@@ -48,7 +48,9 @@ export class DistrictDO {
   async fetch(req) {
     if (req.headers.get('Upgrade') !== 'websocket') return new Response('expected websocket', { status: 426 })
     const uid = parseInt(req.headers.get('x-uid'), 10)
-    const name = req.headers.get('x-name') || ''
+    let name = ''
+    try { name = decodeURIComponent(req.headers.get('x-name') || '') } catch (e) {}
+    this.dn = parseInt(req.headers.get('x-district'), 10) || 0
     if (!(uid > 0)) return new Response('unauthorized', { status: 401 })
     const pair = new WebSocketPair()
     await this.admit(pair[1], uid, name)
@@ -211,7 +213,7 @@ export class DistrictDO {
     s.hello = true
     this.save(ws, s)
     const list = this.all().map(w => this.st(w)).filter(o => o && o.hello && !o.hidden).map(o => o.p)
-    send(ws, makeServer('snap', { you: s.p.id, district: 0, players: list }))
+    send(ws, makeServer('snap', { you: s.p.id, district: this.dn || 0, players: list }))
     if (!s.hidden) this.bcast(makeServer('join', { p: s.p }), ws)
   }
 
@@ -236,7 +238,7 @@ export class DistrictDO {
     let ow = null
     for (const w of this.all()) {
       const o = this.st(w)
-      if (o && o.hello && o.p.id === house) ow = w
+      if (o && o.hello && !o.hidden && o.p.id === house) ow = w
     }
     if (!ow) return res(false, 'away')
     if (await this.blocked(me, house)) return res(false, 'blocked')

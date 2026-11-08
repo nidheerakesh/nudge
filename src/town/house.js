@@ -40,7 +40,8 @@ export class HouseDO {
   async fetch(req) {
     if (req.headers.get('Upgrade') !== 'websocket') return new Response('expected websocket', { status: 426 })
     const uid = parseInt(req.headers.get('x-uid'), 10)
-    const name = req.headers.get('x-name') || ''
+    let name = ''
+    try { name = decodeURIComponent(req.headers.get('x-name') || '') } catch (e) {}
     if (!(uid > 0)) return new Response('unauthorized', { status: 401 })
     const hall = req.headers.get('x-hall') === '1' || String(this.ctx.id && this.ctx.id.name || '').startsWith('hall:')
     const owner = !hall && req.headers.get('x-owner') === '1'
