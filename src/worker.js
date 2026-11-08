@@ -1,6 +1,10 @@
 import { checkOrigin, signup, login, logout, getUser, changePassword, deleteAccount, verifyPassword, sessionCookie, clearCookie } from './auth.js';
 import { insert, patch, remove, all, exportAll, setPrefs, getTimer, putTimer } from './db.js';
 import { ask } from './coach.js';
+import { townRoute } from './town/api.js';
+
+export { DistrictDO } from './town/district.js';
+export { HouseDO } from './town/house.js';
 
 const MAXBODY = 256 * 1024;
 
@@ -95,6 +99,8 @@ async function route(env, request, u, path, body) {
     }
   }
   if (path === '/api/coach' && m === 'POST') return coach(env, request, u, body);
+  const tr = await townRoute(env, request, u, path, body);
+  if (tr) return tr;
   if (parts.length === 1 && m === 'POST') return json({ rows: await insert(env.DB, u.id, a, body) });
   if (parts.length === 2 && /^\d+$/.test(b)) {
     const id = Number(b);
