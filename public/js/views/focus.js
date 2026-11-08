@@ -125,7 +125,7 @@ export default function view(root, ctx) {
       h('option', { value: '' }, 'Pick a task'),
       ...open.map(x => h('option', { value: String(x.id), selected: String(x.id) === pick }, x.title)));
     const chipRow = ui.chips([15, 25, 45, 60, 90].map(v => ({ v, label: v + 'm' })), len(), v => { mins = v; ctx.refresh(); });
-    box.append(
+    box.append(...[
       h('h2', null, 'What do you want to focus on?'),
       blk ? h('div', { class: 'item row' },
         h('div', { class: 'grow' }, h('b', null, blk.title), h('div', { class: 'small muted' }, blk.start + ', ' + ui.fmtMins(blk.mins))),
@@ -138,7 +138,7 @@ export default function view(root, ctx) {
         h('button', { class: 'btn primary', type: 'button', onclick: () => go(task
           ? { task_id: task.id, title: task.title, mins: len() }
           : { title: 'Quick focus', mins: len() }) }, ui.icon('play'), task ? 'Start focus' : 'Start without a task'),
-        h('button', { class: 'btn ghost', type: 'button', onclick: () => go({ title: 'Quick focus', mins: 5 }) }, 'Just 5 minutes')));
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => go({ title: 'Quick focus', mins: 5 }) }, 'Just 5 minutes'))].filter(Boolean));
     return h('div', { class: 'card' }, box);
   }
 
@@ -158,9 +158,9 @@ export default function view(root, ctx) {
     const c30 = store.addDays(day, -30);
     const rated = ss.filter(s => s.rating && dayOf(s.start_at) >= c30);
     const avg = rated.length ? (rated.reduce((a, s) => a + s.rating, 0) / rated.length).toFixed(1) : null;
-    const tile = (v, l) => h('div', { class: 'card stat' }, h('b', null, v), h('span', null, l));
+    const tile = (v, l) => h('div', { class: 'card stat', style: { flex: '1 1 140px' } }, h('b', null, v), h('span', null, l));
     const out = [];
-    out.push(h('div', { class: 'grid7', style: { gridTemplateColumns: 'repeat(2, 1fr)' } },
+    out.push(h('div', { class: 'row' },
       tile(ui.fmtMins(byDay[day] || 0) || '0m', 'Today'),
       tile(ui.fmtMins(wsum) || '0m', 'This week'),
       tile(streak + (streak === 1 ? ' day' : ' days'), 'Streak'),

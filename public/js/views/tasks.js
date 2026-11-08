@@ -10,6 +10,7 @@ let q = '';
 let cf = '';
 let showDone = false;
 let fcourse = '';
+let again = false;
 
 export default function view(root, ctx) {
   const { S, ui, store } = ctx;
@@ -86,8 +87,12 @@ export default function view(root, ctx) {
     const p = parse();
     const obj = { title: p.title, due: p.due || di.value || null, est: p.est || f.est || null, priority: p.priority || f.priority, course_id: fcourse ? Number(fcourse) : null };
     try {
+      again = true;
+      ti.value = '';
+      prev();
       await ctx.add('tasks', obj);
-    } catch (e) { fail(); }
+      ti.blur();
+    } catch (e) { again = false; ti.value = obj.title; prev(); fail(); }
   };
   drawEst();
   drawPr();
@@ -147,4 +152,5 @@ export default function view(root, ctx) {
   draw();
   root.append(h('div', { class: 'wrap col' }, h('h2', null, 'Tasks'), form,
     h('div', { class: 'row' }, h('div', { class: 'grow' }, si), cfs, sd), list));
+  if (again) { again = false; ti.focus(); }
 }

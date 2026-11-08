@@ -282,7 +282,7 @@ export default function view(root, ctx) {
           await del('cards', id);
           draw();
           ui.toast('Card deleted', { action: 'Undo', onAction: () => add('cards', { ...rest, user_id: undefined }).catch(err) });
-        }) }, icon('trash')))) : [h('p', { class: 'muted' }, 'No cards yet.')]);
+        }) }, icon('trash')))) : [h('p', { class: 'muted' }, 'No cards yet.')]));
     };
     draw();
     const s = ui.sheet('Cards: ' + tp.title, h('div', { class: 'col' }, box,

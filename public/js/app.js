@@ -52,7 +52,7 @@ function renderTop() {
   const t = store.timer();
   const title = TABS.find(x => x[0] === cur.tab)[1];
   const pill = t ? h('a', { class: 'badge', href: '#/focus', id: 'pill' }, 'Focus ', h('span', null, fmtClock(store.remainingMs(t)))) : null;
-  el.replaceChildren(h('h1', { class: 'grow' }, title), pill);
+  el.replaceChildren(...[h('h1', { class: 'grow' }, title), pill].filter(Boolean));
   clearInterval(tick);
   if (t) {
     tick = setInterval(() => {
@@ -167,10 +167,10 @@ function quickAdd() {
   const upPrev = () => {
     const p = parse();
     if (!inp.value.trim()) { prev.replaceChildren(); return; }
-    prev.replaceChildren(h('strong', null, p.title),
+    prev.replaceChildren(...[h('strong', null, p.title),
       p.due ? h('span', { class: 'badge' }, p.due) : null,
       p.est ? h('span', { class: 'badge' }, ui.fmtMins(p.est)) : null,
-      p.priority ? h('span', { class: 'badge' + (p.priority === 1 ? ' warn' : '') }, '!' + p.priority) : null);
+      p.priority ? h('span', { class: 'badge' + (p.priority === 1 ? ' warn' : '') }, '!' + p.priority) : null].filter(Boolean));
   };
   const go = async () => {
     const p = parse();
