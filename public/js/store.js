@@ -6,7 +6,7 @@ export { addDays };
 const pad = n => String(n).padStart(2, '0');
 const TABLES = ['courses', 'assessments', 'topics', 'assess_topics', 'cards', 'tasks', 'blocks', 'sessions', 'habits', 'hlog', 'notes'];
 const CASCADE = ['courses', 'topics', 'tasks', 'habits', 'assessments'];
-const TABS = ['today', 'tasks', 'study', 'focus', 'more'];
+const TABS = ['today', 'tasks', 'study', 'focus', 'town', 'more'];
 
 export const S = { user: null, prefs: {}, courses: [], assessments: [], topics: [], assess_topics: [], cards: [], tasks: [], blocks: [], sessions: [], habits: [], hlog: [], notes: [] };
 
