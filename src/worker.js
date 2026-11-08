@@ -1,10 +1,10 @@
 const T = {
   courses: ['name', 'date', 'time', 'kind'],
-  topics: ['course_id', 'title', 'done', 'mins'],
+  topics: ['course_id', 'title', 'done', 'mins', 'diff'],
   days: ['day', 'start', 'end'],
   blocks: ['day', 'start', 'mins', 'kind', 'title', 'ref_kind', 'ref_id', 'done'],
   rounds: ['topic_id', 'done'],
-  tasks: ['course_id', 'title', 'kind', 'due', 'done', 'area_id'],
+  tasks: ['course_id', 'title', 'kind', 'due', 'done', 'area_id', 'est', 'diff', 'done_at'],
   quizzes: ['course_id', 'title', 'date', 'done'],
   qt: ['quiz_id', 'topic_id'],
   dump: ['text', 'done'],
@@ -19,7 +19,14 @@ const T = {
   routines: ['name', 'part'],
   rsteps: ['routine_id', 'title', 'sort'],
   rlog: ['rstep_id', 'day'],
-  notes: ['area_id', 'text']
+  notes: ['area_id', 'text'],
+  sessions: ['day', 'start_at', 'start', 'plan_mins', 'act_mins', 'pauses', 'end_kind', 'rating', 'ref_kind', 'ref_id', 'diff'],
+  prefs: ['k', 'v']
+};
+
+const DF = ['easy', 'medium', 'hard'];
+const fixDf = r => {
+  if (r.diff !== undefined && !DF.includes(r.diff)) r.diff = 'medium';
 };
 
 const M = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
@@ -47,8 +54,10 @@ const SYS = td => 'You are Nudge, a calm study planner for a student. Today is '
   'Reply with ONLY a JSON object {"reply": string, "actions": [...]} and nothing else. reply is short, friendly, plain text. ' +
   'actions are proposals the user confirms, use [] when nothing should change. Allowed: ' +
   '{"op":"move_task","id":N,"due":"YYYY-MM-DD"}, {"op":"done_task","id":N}, {"op":"add_task","title":S,"course_id":N|null,"due":"YYYY-MM-DD"}, ' +
-  '{"op":"delete_task","id":N}, {"op":"add_quiz","course_id":N,"title":S,"date":"YYYY-MM-DD","topic_ids":[N]}, {"op":"replan_course","course_id":N}, {"op":"add_today","title":S}. ' +
-  'Use only ids from the data. For a quiz, add it and move the Revise tasks for its topics to days before the quiz.';
+  '{"op":"delete_task","id":N}, {"op":"add_quiz","course_id":N,"title":S,"date":"YYYY-MM-DD","topic_ids":[N]}, {"op":"replan_course","course_id":N}, {"op":"add_today","title":S}, ' +
+  '{"op":"remember","text":S} (a short lasting fact about the student), {"op":"set_pref","key":"day_start"|"day_end","value":"HH:MM"} or {"op":"set_pref","key":"max_focus","value":15-120}. ' +
+  'Use only ids from the data. For a quiz, add it and move the Revise tasks for its topics to days before the quiz. ' +
+  'The data has "profile" (what the app learned about when and how long the student focuses, from their own sessions) and "memory" (facts to remember). Use them to give personal advice and never invent numbers. You do not place study blocks, the app does.';
 
 const chat = async (b, env, db) => {
   const td = isD(b.day) ? b.day : new Date().toISOString().slice(0, 10);
@@ -61,16 +70,22 @@ const chat = async (b, env, db) => {
     db.prepare('SELECT id, course_id, title, done FROM topics ORDER BY id'),
     db.prepare('SELECT id, title, course_id, due FROM tasks WHERE done=0 ORDER BY due IS NULL, due, id LIMIT 200'),
     db.prepare('SELECT id, course_id, title, date, done FROM quizzes ORDER BY id'),
-    db.prepare('SELECT title, done FROM today WHERE day=? ORDER BY sort, id').bind(td)
+    db.prepare('SELECT title, done FROM today WHERE day=? ORDER BY sort, id').bind(td),
+    db.prepare("SELECT v FROM prefs WHERE k='memory'")
   ]);
-  const [cs, tp, tk, qz, tdy] = rs.map(r => r.results);
+  const [cs, tp, tk, qz, tdy, mem] = rs.map(r => r.results);
+  let memory = [];
+  try { const m = JSON.parse(mem[0] && mem[0].v); if (Array.isArray(m)) memory = m.map(x => String(x).slice(0, 200)).slice(-20); } catch (e) {}
+  const prof = b.profile && typeof b.profile === 'object' && !Array.isArray(b.profile) && JSON.stringify(b.profile).length <= 800 ? b.profile : null;
   const C = new Map(cs.map(c => [c.id, c])), K = new Map(tk.map(t => [t.id, t])), TP = new Map(tp.map(t => [t.id, t]));
   const ctx = {
     courses: cs.map(c => ({ id: c.id, name: c.name, exam: c.date, last: c.date ? ad(c.date, -1) : null })),
     topics: Object.fromEntries(cs.map(c => [c.id, tp.filter(t => t.course_id === c.id).map(t => [t.id, t.title, t.done])])),
     tasks: tk.map(t => [t.id, t.title, t.course_id, t.due]),
     quizzes: qz.filter(q => !q.done).map(q => ({ id: q.id, course_id: q.course_id, title: q.title, date: q.date })),
-    today: tdy.map(t => t.title + (t.done ? ' (done)' : ''))
+    today: tdy.map(t => t.title + (t.done ? ' (done)' : '')),
+    profile: prof,
+    memory
   };
   const r = await env.AI.run(M, { messages: [{ role: 'system', content: SYS(td) + '\nData: ' + JSON.stringify(ctx) }, ...ms], max_tokens: 1500 });
   const x = typeof (r && r.response) === 'object' ? JSON.stringify(r.response) : String((r && r.response) || '');
@@ -127,6 +142,14 @@ const chat = async (b, env, db) => {
       if (ntd >= 3) { nt.push('Today already has 3 priorities, so "' + ti + '" was left out.'); continue; }
       ntd++;
       out.push({ op, title: ti });
+    } else if (op === 'remember') {
+      const tx = String(v.text || '').trim().slice(0, 200);
+      if (tx) out.push({ op, text: tx });
+    } else if (op === 'set_pref') {
+      const k = v.key, val = v.value, hm = x => typeof x === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(x);
+      if ((k === 'day_start' || k === 'day_end') && hm(val)) out.push({ op, key: k, value: val });
+      else if (k === 'max_focus' && Number.isInteger(Number(val)) && Number(val) >= 15 && Number(val) <= 120) out.push({ op, key: k, value: Number(val) });
+      else nt.push('Dropped an invalid preference change.');
     } else nt.push('Dropped an unsupported action.');
   }
   return json({ reply: (rp || 'Here is what I suggest.') + (nt.length ? '\n\nNote: ' + nt.join(' ') : ''), actions: out });
@@ -183,7 +206,7 @@ const ai = async (p, req, env, db) => {
 };
 
 const json = (d, s = 200) =>
-  new Response(JSON.stringify(d), { status: s, headers: { 'content-type': 'application/json' } });
+  new Response(JSON.stringify(d), { status: s, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
 export default {
   async fetch(req, env) {
@@ -195,12 +218,29 @@ export default {
     try {
       if (req.method === 'GET' && p[1] === 'all') {
         const names = Object.keys(T);
-        const rs = await db.batch(names.map(t => db.prepare('SELECT * FROM ' + t + ' ORDER BY id')));
+        const rs = await db.batch(
+          names.map(t =>
+            db.prepare(
+              'SELECT * FROM ' + t + (t === 'sessions' ? " WHERE day>=date('now','-90 day')" : '') + ' ORDER BY id'
+            )
+          )
+        );
         const out = {};
         names.forEach((t, i) => (out[t] = rs[i].results));
         return json(out);
       }
       if (req.method === 'POST' && p[1] === 'ai') return await ai(p, req, env, db);
+      if (req.method === 'POST' && p[1] === 'memory') {
+        const b = await req.json();
+        const s = b && typeof b.text === 'string' ? b.text.trim().slice(0, 200) : '';
+        if (!s) return json({ error: 'text' }, 400);
+        await db.batch([
+          db.prepare("INSERT OR IGNORE INTO prefs(k,v) VALUES('memory','[]')"),
+          db.prepare("UPDATE prefs SET v=json_insert(CASE WHEN json_valid(v) THEN v ELSE '[]' END,'$[#]',?) WHERE k='memory'").bind(s),
+          db.prepare("UPDATE prefs SET v=json_remove(v,'$[0]') WHERE k='memory' AND json_array_length(v)>20")
+        ]);
+        return json({ ok: 1 });
+      }
       if (p[1] === 'timer') {
         if (req.method === 'GET') {
           const r = await db.prepare('SELECT data FROM timer WHERE id=1').first();
@@ -223,10 +263,12 @@ export default {
         const rows = Array.isArray(b) ? b : [b];
         if (!rows.length || rows.some(r => !r || typeof r !== 'object' || Array.isArray(r))) return json({ error: 'row' }, 400);
         const sts = rows.map(r => {
+          fixDf(r);
           const k = cols.filter(c => r[c] !== undefined);
           const sql =
             'INSERT ' + (t === 'hlog' || t === 'rlog' ? 'OR IGNORE ' : '') + 'INTO ' + t +
-            '(' + k.join(',') + ') VALUES(' + k.map(() => '?').join(',') + ')';
+            '(' + k.join(',') + ') VALUES(' + k.map(() => '?').join(',') + ')' +
+            (t === 'prefs' && k.includes('k') ? ' ON CONFLICT(k) DO UPDATE SET v=excluded.v' : '');
           return db.prepare(sql).bind(...k.map(c => r[c]));
         });
         const rs = await db.batch(sts);
@@ -236,12 +278,17 @@ export default {
       if (req.method === 'PATCH' && id) {
         const b = await req.json();
         if (!b || typeof b !== 'object') return json({ error: 'row' }, 400);
+        fixDf(b);
         const k = cols.filter(c => b[c] !== undefined);
         const st = [];
+        const once = t === 'sessions' && b.end_kind !== undefined;
         if (k.length)
           st.push(
             db
-              .prepare('UPDATE ' + t + ' SET ' + k.map(c => c + '=?').join(',') + ' WHERE id=?')
+              .prepare(
+                'UPDATE ' + t + ' SET ' + k.map(c => c + '=?').join(',') + ' WHERE id=?' +
+                  (once ? " AND end_kind IN ('open','abandoned')" : '')
+              )
               .bind(...k.map(c => b[c]), id)
           );
         if (t === 'quizzes' && b.done === 1)
@@ -250,8 +297,8 @@ export default {
               .prepare('UPDATE topics SET done=1 WHERE id IN (SELECT topic_id FROM qt WHERE quiz_id=?)')
               .bind(id)
           );
-        if (st.length) await db.batch(st);
-        return json({ ok: 1 });
+        const rs = st.length ? await db.batch(st) : [];
+        return json({ ok: 1, n: rs.length ? rs[0].meta.changes : 0 });
       }
 
       if (req.method === 'DELETE') {

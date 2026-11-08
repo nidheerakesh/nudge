@@ -172,6 +172,8 @@ details>summary{font-weight:700;margin-top:12px;min-height:44px;display:flex;ali
 #toast span{min-width:0;overflow-wrap:anywhere}
 #toast button{border:2px solid currentColor;background:transparent;color:inherit;border-radius:8px;min-height:44px;padding:0 12px;font-weight:700}
 #toast button:focus-visible{outline-color:var(--color-background)}
+#rate{position:fixed;left:50%;top:calc(12px + env(safe-area-inset-top));transform:translateX(-50%);display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;padding:10px 14px;background:var(--color-card);color:var(--color-card-foreground);border:1px solid var(--color-border);border-radius:var(--r);z-index:11;max-width:92vw}
+#rate:empty{display:none}
 .pd{content-visibility:auto;contain-intrinsic-size:auto 220px}
 #fab{position:fixed;right:16px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:8;border-radius:999px;box-shadow:var(--shadow-md)}
 #chat{position:fixed;top:0;right:0;bottom:0;width:360px;max-width:100%;z-index:7;background:var(--color-card);color:var(--color-card-foreground);border-left:1px solid var(--color-border);display:flex;flex-direction:column}
@@ -218,7 +220,8 @@ body.cw #nav{right:360px}
 .bk-b{flex:1;min-width:0;min-height:44px;border:0;background:transparent;color:inherit;font:inherit;text-align:left;display:flex;flex-direction:column;justify-content:center;padding:4px 0;overflow-wrap:anywhere;cursor:pointer}
 .bk-t{font-weight:600}
 .bk-ed{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding:8px 8px 8px 0}
-.bk-ed label{display:grid;gap:2px;font-size:14px}
+.bk-ed label,.fl{display:grid;gap:2px;font-size:14px}
+.list .bk-ed label{flex:0 0 auto;display:grid;gap:2px;min-height:0;align-items:start}
 .bk-ed input:not([type=checkbox]){width:132px}
 @media(max-width:380px){.tl-r{grid-template-columns:40px minmax(0,1fr);gap:6px}}
 #study{position:fixed;inset:0;z-index:40;background:#2a1d14;display:flex;flex-direction:column;overflow:hidden;overscroll-behavior:contain}
@@ -258,6 +261,7 @@ body.cw #nav{right:360px}
     <div class="brand">Nudge</div>
     <button id="mini" hidden></button>
     <span id="stk"></span>
+    <button id="rfr" class="x" type="button" aria-label="Refresh the app"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></svg></span></button>
   </div>
 </header>
 <main id="app" tabindex="-1"></main>
@@ -303,7 +307,7 @@ function I(n){const s=document.createElement('span');s.className='ic';s.setAttri
 
 let PIN=localStorage.getItem('pin')||'';
 async function api(m,p,b,re){
-  const r=await fetch('/api/'+p,{method:m,headers:{'content-type':'application/json','x-pin':PIN},body:b?JSON.stringify(b):undefined});
+  const r=await fetch('/api/'+p,{method:m,cache:'no-store',headers:{'content-type':'application/json','x-pin':PIN},body:b?JSON.stringify(b):undefined});
   if(r.status===401){
     if(re){toast('Wrong PIN. Try again from the action.');throw new Error('pin');}
     const v=prompt('Enter your PIN');
@@ -318,7 +322,7 @@ async function api(m,p,b,re){
   return r.json();
 }
 
-const E={courses:[],topics:[],rounds:[],tasks:[],quizzes:[],qt:[],dump:[],rem:[],habits:[],hlog:[],log:[],areas:[],goals:[],steps:[],today:[],routines:[],rsteps:[],rlog:[],notes:[],days:[],blocks:[]};
+const E={courses:[],topics:[],rounds:[],tasks:[],quizzes:[],qt:[],dump:[],rem:[],habits:[],hlog:[],log:[],areas:[],goals:[],steps:[],today:[],routines:[],rsteps:[],rlog:[],notes:[],days:[],blocks:[],sessions:[],prefs:[]};
 let S=Object.assign({},E);
 const VW=['today','inbox','goals','now','day','exams','tasks','quiz','rem','hab','rout','areas','log'];
 const fixT=k=>k==='plan'?'day':k;
@@ -381,7 +385,7 @@ async function load(){
   for(const[k,p]of PD)r[p.t]=r[p.t].filter(x=>x.id!==p.id);
   S=r;
 }
-async function add(t,b){try{await api('POST',t,b);await load();}catch(e){fail(e);}render();}
+async function add(t,b){try{await api('POST',t,b);await load();}catch(e){fail(e);}render();if(t==='tasks')kick(1);else if(t==='blocks')kick();}
 async function rmNow(t,id){
   try{await api('DELETE',t+'/'+id);}catch(e){fail(e);}
   try{await load();}catch(e){}
@@ -411,7 +415,7 @@ async function upd(t,id,b){
   const o=S[t].find(x=>x.id===id);if(!o)return;
   const was={};for(const k in b)was[k]=o[k];
   Object.assign(o,b);render();
-  try{await api('PATCH',t+'/'+id,b);}
+  try{await api('PATCH',t+'/'+id,b);if(t==='tasks'&&('est' in b||'diff' in b||'due' in b)){DT.add('task:'+id);kick(1);}}
   catch(e){Object.assign(o,was);render();fail(e);}
 }
 function addLog(kind,text,mins){
@@ -423,9 +427,10 @@ const RK={task:'tasks',quiz:'quizzes',step:'steps',topic:'topics',dump:'dump'};
 function lnk(k,o){
   const r=[],ad=(t,xs)=>xs.forEach(x=>r.push([t,x]));
   const byRef=(t,rk)=>(S[t]||[]).filter(x=>x.ref_kind===rk&&x.ref_id===o.id);
-  if(k==='topics'){ad('tasks',S.tasks.filter(t=>t.course_id===o.course_id&&t.title==='Revise: '+o.title));ad('blocks',byRef('blocks','topic'));}
+  if(k==='topics'){ad('tasks',S.tasks.filter(t=>t.course_id===o.course_id&&(t.title==='Revise: '+o.title||t.title==='Study: '+o.title)));ad('blocks',byRef('blocks','topic'));}
   if(k==='tasks'){
     if((o.title||'').startsWith('Revise: '))ad('topics',S.topics.filter(x=>x.course_id===o.course_id&&x.title===o.title.slice(8)));
+    if((o.title||'').startsWith('Study: '))ad('topics',S.topics.filter(x=>x.course_id===o.course_id&&x.title===o.title.slice(7)));
     ad('blocks',byRef('blocks','task'));ad('today',byRef('today','task'));
   }
   if(k==='quizzes'){ad('blocks',byRef('blocks','quiz'));if(o.done)ad('topics',S.qt.filter(q=>q.quiz_id===o.id).map(q=>S.topics.find(t=>t.id===q.topic_id)).filter(Boolean));}
@@ -462,8 +467,9 @@ function fin(k,id,on=1){
     toast(['Nice. That one is behind you.','One less thing.','Done. '+n+' today.'][n%3]);
   }
   render();
-  api('PATCH',k+'/'+id,{done:on});
+  api('PATCH',k+'/'+id,k==='tasks'?{done:on,done_at:on?new Date().toISOString():null}:{done:on});
   link(k,id,on);
+  if(k==='tasks'||k==='topics'||k==='quizzes')kick();
 }
 
 function toast(m,o){
@@ -474,7 +480,7 @@ function toast(m,o){
   if(o.btn)bs.push(h('button',{type:'button',onclick:()=>{hide();o.btn[1]();}},o.btn[0]));
   if(o.btn||o.err)bs.push(h('button',{type:'button','aria-label':'Dismiss',onclick:hide},I('x')));
   e.replaceChildren(h('span',{},m),...bs);e.className='show';
-  clearTimeout(toast.t);toast.t=setTimeout(hide,o.btn||o.err?6500:3500);
+  clearTimeout(toast.t);toast.t=setTimeout(hide,o.ms||(o.btn||o.err?6500:3500));
 }
 let ac;
 function unlock(){try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume();}catch(e){}}
@@ -504,7 +510,7 @@ const remMs=t=>t.paused!=null?t.paused:t.end-Date.now();
 function addTime(t){if(t.paused!=null)t.paused+=6e5;else t.end+=6e5;}
 function togglePause(){
   const t=getTm();if(!t||t.fin)return;
-  if(t.paused!=null){t.end=Date.now()+t.paused;t.paused=null;}else t.paused=Math.max(0,t.end-Date.now());
+  if(t.paused!=null){t.end=Date.now()+t.paused;t.paused=null;}else{t.paused=Math.max(0,t.end-Date.now());t.pauses=(t.pauses||0)+1;}
   setTm(t);render();
 }
 const getTm=()=>{try{return JSON.parse(localStorage.getItem('tm')||'null');}catch(e){return null;}};
@@ -524,16 +530,22 @@ async function pullTm(){
   }catch(e){}
 }
 const getDur=()=>+localStorage.getItem('last')||25;
+const bDur=b=>{const o=localStorage.getItem('durb');return o&&+o===b.id?getDur():(+b.mins||getDur());};
 function startFocus(ref,mins){
   unlock();askNotif();
-  const m=+mins||25;
-  localStorage.setItem('last',m);
-  setTm({end:Date.now()+m*6e4,total:m,mode:'focus',ref});
+  const m=+mins||25,tid=Date.now();
+  if(!ref||ref.k!=='blocks')localStorage.setItem('last',m);
+  endOld();
+  setTm({end:Date.now()+m*6e4,total:m,mode:'focus',ref,tid});
+  openSess(m,ref,tid);
   render();
 }
 function just5(ref){
   unlock();askNotif();
-  setTm({end:Date.now()+3e5,total:5,mode:'focus',ref});
+  const tid=Date.now();
+  endOld();
+  setTm({end:Date.now()+3e5,total:5,mode:'focus',ref,tid});
+  openSess(5,ref,tid);
   render();
 }
 function startBreak(){setTm({end:Date.now()+3e5,total:5,mode:'break',ref:null});render();}
@@ -542,6 +554,7 @@ function stopFocus(done){
   if(t.mode==='focus'){
     const m=Math.round(t.total-remMs(t)/6e4);
     if(m>=1)addLog('focus',t.ref?t.ref.title:'Focus',m);
+    if(!t.closed)closeSess(t,Math.max(0,Math.min(t.total,m)),m<1?'abandoned':m>=t.total?'done':'stopped');
   }
   setTm(null);
   if(done&&t.ref&&t.ref.id)fin(t.ref.k,t.ref.id);else render();
@@ -570,8 +583,8 @@ function tick(){
   const t=getTm();
   if(t&&!t.fin&&t.paused==null&&Date.now()>=t.end){
     if(t.mode==='focus'){
-      t.fin=1;setTm(t);
-      addLog('focus',t.ref?t.ref.title:'Focus',t.total);
+      t.fin=1;t.closed=1;setTm(t);
+      closeSess(t,t.total,'done').then(ok=>{if(ok)addLog('focus',t.ref?t.ref.title:'Focus',t.total);});
       ping('Round complete','Nice work. Take a breather.');
       render(1);
     }else{setTm(null);ping('Break over','Ready for the next thing?');render(1);}
@@ -580,6 +593,208 @@ function tick(){
   paint();checkRem();
 }
 setInterval(tick,1000);
+
+const prefv=(k,d)=>{const x=S.prefs.find(p=>p.k===k);if(!x)return d;try{return JSON.parse(x.v);}catch(e){return d;}};
+async function setPref(k,v){
+  const x=S.prefs.find(p=>p.k===k),s=JSON.stringify(v);
+  await api('POST','prefs',{k,v:s});
+  if(x)x.v=s;else S.prefs.push({id:-Date.now(),k,v:s});
+}
+const sref=ref=>{
+  if(!ref)return[null,null];
+  if(ref.k==='blocks'){const b=S.blocks.find(x=>x.id===ref.id);return b&&b.ref_kind?[b.ref_kind,b.ref_id]:[null,null];}
+  const m={tasks:'task',quizzes:'quiz',topics:'topic',steps:'step',dump:'dump'};
+  return[m[ref.k]||null,ref.id||null];
+};
+const sdif=(rk,ri)=>{const o=rk==='task'?S.tasks.find(x=>x.id===ri):rk==='topic'?S.topics.find(x=>x.id===ri):null;return(o&&o.diff)||'medium';};
+const SP=new Map();
+function openSess(m,ref,tid){
+  const n=new Date(),[rk,ri]=sref(ref);
+  const row={day:today(),start_at:n.getTime(),start:pad(n.getHours())+':'+pad(n.getMinutes()),plan_mins:m,act_mins:0,pauses:0,end_kind:'open',ref_kind:rk,ref_id:ri,diff:sdif(rk,ri)};
+  const p=api('POST','sessions',row).then(r=>{
+    if(!r||!r.id)return null;
+    S.sessions.push(Object.assign({id:r.id},row));
+    const t=getTm();
+    if(t&&t.tid===tid&&!t.sid&&!t.closed){t.sid=r.id;setTm(t);}
+    return r.id;
+  }).catch(()=>null);
+  SP.set(tid,{row,p});
+}
+async function closeSess(t,act,kind,quiet){
+  const b={act_mins:act,pauses:t.pauses||0,end_kind:kind},q=SP.get(t.tid);
+  let id=t.sid||(q?await q.p:null),ok=0;
+  try{
+    if(id){const r=await api('PATCH','sessions/'+id,b);ok=r&&r.n>0;}
+    else if(q){const r=await api('POST','sessions',Object.assign({},q.row,b));id=r&&r.id;ok=!!id;if(id)S.sessions.push(Object.assign({id},q.row));}
+    else ok=1;
+  }catch(e){}
+  SP.delete(t.tid);
+  const s=id&&S.sessions.find(x=>x.id===id);
+  if(s)Object.assign(s,b);
+  if(ok&&id&&act>=5&&!quiet)rateAsk(id);
+  if(ok)kick();
+  return ok;
+}
+function endOld(){
+  const o=getTm();
+  if(!o||o.mode!=='focus'||o.closed||o.fin)return;
+  const m=Math.round(o.total-remMs(o)/6e4);
+  closeSess(o,Math.max(0,Math.min(o.total,m)),m<1?'abandoned':'stopped',1);
+}
+function cleanSess(){
+  const t=getTm(),now=Date.now();
+  S.sessions.filter(s=>s.end_kind==='open'&&!(t&&t.sid===s.id)&&now-(s.start_at||0)>((+s.plan_mins||0)+30)*6e4)
+    .forEach(s=>{s.end_kind='abandoned';api('PATCH','sessions/'+s.id,{end_kind:'abandoned'}).catch(()=>{});});
+}
+const rb=h('div',{id:'rate',role:'group','aria-label':'Rate your focus','aria-live':'polite'});
+document.body.append(rb);
+function rateAsk(sid){
+  const go=v=>{
+    rb.replaceChildren();clearTimeout(rateAsk.t);
+    if(!v)return;
+    const s=S.sessions.find(x=>x.id===sid);if(s)s.rating=v;
+    api('PATCH','sessions/'+sid,{rating:v}).catch(()=>{});
+  };
+  rb.replaceChildren(h('span',{},'How focused were you?'),
+    ...[1,2,3,4,5].map(v=>h('button',{type:'button',class:'btn s ghost','aria-label':v+' out of 5',onclick:()=>go(v)},v)),
+    h('button',{type:'button',class:'btn s ghost',onclick:()=>go(0)},'Skip'));
+  clearTimeout(rateAsk.t);rateAsk.t=setTimeout(()=>go(0),90000);
+}
+rb.addEventListener('focusin',()=>clearTimeout(rateAsk.t));
+const qual=s=>{
+  const r=s.plan_mins>0?Math.min(1,s.act_mins/s.plan_mins):0;
+  const x=s.rating?(r+(s.rating-1)/4)/2:r;
+  return s.pauses>2?x*.85:x;
+};
+function profile(){
+  const xs=S.sessions.filter(s=>(s.end_kind==='done'||s.end_kind==='stopped')&&s.plan_mins>0&&s.act_mins>=1&&s.start);
+  const hr={};
+  for(let k=0;k<24;k++){
+    const w=xs.filter(s=>Math.abs(Math.floor(hm2m(s.start)/60)-k)<=1);
+    if(w.length>=3&&xs.some(s=>Math.floor(hm2m(s.start)/60)===k))hr[k]=w.reduce((a,s)=>a+qual(s),0)/w.length;
+  }
+  const ks=Object.keys(hr).sort((a,b)=>hr[b]-hr[a]);
+  const best=ks.slice(0,2).map(Number).sort((a,b)=>a-b);
+  const worst=ks.length>=4&&hr[ks[0]]-hr[ks[ks.length-1]]>.15?ks.slice(-2).map(Number).sort((a,b)=>a-b):[];
+  const lc=m=>m<=30?25:m<=50?45:m<=75?60:90,L={};
+  xs.forEach(s=>{const c=lc(s.plan_mins);(L[c]=L[c]||[]).push(qual(s));});
+  let len=null,bs=-1;
+  for(const c of[25,45,60,90]){const a=L[c];if(a&&a.length>=3){const v=a.reduce((p,q)=>p+q,0)/a.length;if(v>bs+.02){bs=v;len=c;}}}
+  const mu={easy:[0,0,0],medium:[0,0,0],hard:[0,0,0]};
+  S.tasks.filter(t=>t.done&&t.est>0).forEach(t=>{
+    const a=xs.filter(s=>s.ref_kind==='task'&&s.ref_id===t.id).reduce((p,s)=>p+s.act_mins,0);
+    if(a<=0)return;
+    const m=mu[t.diff]||mu.medium;m[0]+=a;m[1]+=t.est;m[2]++;
+  });
+  const mult={};
+  for(const k in mu){const m=mu[k];mult[k]=m[2]>=3?Math.max(.6,Math.min(2,m[0]/m[1])):1;}
+  return{n:xs.length,done:xs.filter(s=>s.end_kind==='done').length,hr,best,worst,len,mult,ready:xs.length>=8&&ks.length>0};
+}
+function pSum(){
+  const p=profile();
+  return{sessions:p.n,finish_rate:p.n?Math.round(100*p.done/p.n):null,best_hours:p.best,weak_hours:p.worst,best_len:p.len,estimate_ratio:p.mult,ready:p.ready};
+}
+function insCard(){
+  const p=profile(),L=[],hh=k=>k+':00';
+  if(!p.ready)L.push('Learning your rhythm: '+p.n+' of 8 focus sessions recorded. Rating sessions after you finish them speeds this up.');
+  else{
+    if(p.best.length)L.push('You focus best around '+p.best.map(hh).join(' and ')+'.');
+    if(p.worst.length)L.push('Focus is weakest around '+p.worst.map(hh).join(' and ')+'.');
+    if(p.len)L.push('Sessions of about '+p.len+' minutes work best for you.');
+    for(const k of['easy','medium','hard'])if(p.mult[k]!==1)L.push('Your '+k+' tasks take about '+Math.round(p.mult[k]*100)+'% of the time you estimate.');
+  }
+  if(p.n)L.push(Math.round(100*p.done/p.n)+'% of your sessions ran to the end.');
+  const on=prefv('auto_t',1)!==0;
+  return h('div',{class:'card'},h('h3',{},'Your focus profile'),
+    h('ul',{class:'list'},L.map(x=>h('li',{},h('div',{class:'lt'},x)))),
+    h('label',{class:'small',style:'display:flex;gap:8px;align-items:center;margin:10px 0'},
+      h('input',{type:'checkbox',checked:on,onchange:e=>{setPref('auto_t',e.target.checked?1:0).then(()=>render()).catch(fail);}}),'Replan today automatically when tasks change'),
+    h('button',{class:'btn s',onclick:()=>{copen();csend('Look at my focus pattern and tell me how to plan my week.');}},'Ask the coach'));
+}
+
+let akT=null,aBusy=0,AH=0,KL=0;
+const runB=b=>{const t=getTm();return!!(t&&t.ref&&t.ref.k==='blocks'&&t.ref.id===b.id);};
+const MG=['task'];
+function kick(lo){
+  if(prefv('auto_t',1)===0||Date.now()<AH)return;
+  if(lo)KL=1;
+  clearTimeout(akT);akT=setTimeout(autoPlan,1500);
+}
+const DT=new Set();
+const ovl=(a,b)=>hm2m(a.start)<hm2m(b.start)+(+b.mins||0)&&hm2m(b.start)<hm2m(a.start)+(+a.mins||0);
+async function dedupe(d){
+  await load();
+  const seen=new Set(),ex=new Set(),kp=[];
+  const auto=b=>b.kind==='break'||(b.kind==='focus'&&MG.includes(b.ref_kind));
+  S.blocks.filter(b=>b.day===d&&b.kind!=='fixed').sort((a,b)=>a.id-b.id).forEach(b=>{
+    const k=b.start+'|'+b.kind+'|'+b.ref_kind+'|'+b.ref_id;
+    if(seen.has(k)||(!b.done&&auto(b)&&kp.some(x=>ovl(x,b))))ex.add(b.id);else{seen.add(k);kp.push(b);}
+  });
+  await Promise.all([...ex].map(id=>api('DELETE','blocks/'+id)));
+  if(ex.size)S.blocks=S.blocks.filter(b=>!ex.has(b.id));
+}
+function apCalc(){
+  const d=today(),n=new Date(),nm=n.getHours()*60+n.getMinutes();
+  if(hm2m(dwin(d).end)-nm<RMIN)return null;
+  const old=S.blocks.filter(b=>b.day===d&&!b.done&&!runB(b)&&b.kind==='focus'&&MG.includes(b.ref_kind)).sort((a,b)=>hm2m(a.start)-hm2m(b.start));
+  const ends=new Set(old.map(b=>hm2m(b.start)+(+b.mins||0)));
+  const brk=S.blocks.filter(b=>b.day===d&&b.kind==='break'&&!b.done&&ends.has(hm2m(b.start)));
+  const live=b=>{
+    const o=b.ref_kind==='task'?S.tasks.find(x=>x.id===b.ref_id):b.ref_kind==='quiz'?S.quizzes.find(x=>x.id===b.ref_id):S.topics.find(x=>x.id===b.ref_id);
+    return!!o&&!o.done;
+  };
+  const keep=[],rm=[];
+  const fx=S.blocks.filter(b=>b.day===d&&b.kind==='fixed').map(b=>[hm2m(b.start),hm2m(b.start)+(+b.mins||0)]);
+  old.forEach(b=>{
+    const miss=hm2m(b.start)+(+b.mins||0)<nm||fx.some(f=>hm2m(b.start)<f[1]&&hm2m(b.start)+(+b.mins||0)>f[0])||DT.has(b.ref_kind+':'+b.ref_id);
+    if(!miss&&live(b))keep.push(b);
+    else rm.push(b);
+  });
+  const kend=new Set(keep.map(b=>hm2m(b.start)+(+b.mins||0)));
+  brk.filter(b=>!kend.has(hm2m(b.start))).forEach(b=>rm.push(b));
+  const r=fill(d,d,new Set(rm.map(b=>b.id)),it=>it.ref_kind==='task');
+  return{d,rm,r,add:r.blocks,idle:!r.blocks.length&&!rm.some(b=>b.kind==='focus')};
+}
+const apLk=v=>{try{if(v==null)return+localStorage.getItem('aplk')||0;if(v)localStorage.setItem('aplk',v);else localStorage.removeItem('aplk');}catch(e){}return 0;};
+async function autoPlan(){
+  if(dpl||document.hidden||Date.now()<AH)return;
+  const lo=KL;KL=0;
+  if(aBusy||drag||bkEd!=null||Date.now()-apLk()<2e4){KL=lo;clearTimeout(akT);akT=setTimeout(autoPlan,5000);return;}
+  let c=apCalc();
+  if(!c||c.idle){
+    if(c&&lo&&c.r.skip.length)toast('No room left today for '+c.r.skip.slice(0,3).map(x=>x.title).join(', ')+'. Shorten something or move it to another day.',{err:1});
+    DT.clear();return;
+  }
+  aBusy=1;apLk(Date.now());
+  try{
+    await load();
+    if(Date.now()<AH)return;
+    c=apCalc();
+    if(!c||c.idle){DT.clear();return;}
+    const{d,rm,r,add}=c,rows=rm.map(({id,...b})=>b);
+    if(add.length)await api('POST','blocks',add);
+    await Promise.all(rm.map(b=>api('DELETE','blocks/'+b.id)));
+    DT.clear();
+    await dedupe(d);
+    const mv=rm.filter(b=>b.kind==='focus'&&add.some(a=>a.ref_kind===b.ref_kind&&a.ref_id===b.ref_id)).length;
+    const na=add.filter(a=>a.kind==='focus').length-mv,nr=rm.filter(b=>b.kind==='focus').length-mv;
+    const ps=[na?na+' added':'',mv?mv+' moved':'',nr?nr+' removed':''].filter(Boolean).join(', ')||'breaks adjusted';
+    toast('Replanned today: '+ps+'.'+(r.skip.length?' '+r.skip.length+(r.skip.length===1?' item did':' items did')+' not fit.':''),{btn:['Undo',()=>undoAuto(d,rows,add)],ms:15000});
+  }catch(e){fail(e);}
+  finally{aBusy=0;apLk(0);render(1);}
+}
+async function undoAuto(d,rows,add){
+  AH=Date.now()+6e5;clearTimeout(akT);KL=0;aBusy=1;
+  try{
+    await load();
+    const ks=new Set(add.map(a=>a.start+'|'+a.kind+'|'+a.ref_kind+'|'+a.ref_id));
+    const nw=S.blocks.filter(b=>b.day===d&&!b.done&&ks.has(b.start+'|'+b.kind+'|'+b.ref_kind+'|'+b.ref_id));
+    if(rows.length)await api('POST','blocks',rows);
+    await Promise.all(nw.map(b=>api('DELETE','blocks/'+b.id)));
+    await load();toast('Restored the earlier plan. Automatic replanning is paused for 10 minutes.');
+  }catch(e){fail(e);}
+  aBusy=0;render();
+}
 
 const grp=k=>(TOP.find(g=>g[3].includes(k))||TOP[0]);
 function go(k){k=fixT(k);tab=k;localStorage.setItem('tab',k);if(location.hash!=='#'+k)location.hash=k;render();window.scrollTo(0,0);}
@@ -695,6 +910,22 @@ function routCard(r,full){
 const rv=t=>(t.title||'').startsWith('Revise: ');
 const obs=d=>S.blocks.filter(b=>b.day===d&&b.kind!=='break'&&!b.done).sort((a,b)=>hm2m(a.start)-hm2m(b.start)||a.id-b.id);
 const bref=b=>({k:'blocks',id:b.id,title:b.title||b.kind,sub:'Planned at '+b.start+', '+(b.mins||0)+' min'});
+const stk=t=>S.tasks.find(x=>!x.done&&x.course_id===t.course_id&&x.title==='Study: '+t.title);
+const estIn=(ph,v)=>h('input',{type:'number',min:5,max:600,step:5,class:'num',inputmode:'numeric',autocomplete:'off',placeholder:ph,'aria-label':'Estimated minutes',value:v||null});
+const difSel=v=>h('select',{'aria-label':'Difficulty'},['easy','medium','hard'].map(k=>h('option',{value:k,selected:k===(v||'medium')},k[0].toUpperCase()+k.slice(1))));
+const fl=(t,el)=>h('label',{class:'fl'},h('span',{},t),el);
+const estPh=()=>{const xs=S.tasks.filter(t=>t.est>0).map(t=>t.est).sort((a,b)=>a-b);return'e.g. '+(xs.length?xs[Math.floor(xs.length/2)]:30)+'…';};
+function taskAdd(){
+  const ti=h('input',{class:'grow',placeholder:'Add a task for today…','aria-label':'Task title',autocomplete:'off'});
+  const es=estIn(estPh()),df=difSel();
+  const du=h('input',{type:'date',value:today(),'aria-label':'Due date'});
+  const go1=()=>{
+    if(!ti.value.trim())return;
+    add('tasks',{title:ti.value.trim(),kind:'todo',due:du.value||null,est:+es.value>0?+es.value:null,diff:df.value});
+  };
+  ti.addEventListener('keydown',e=>{if(e.key==='Enter')go1();});
+  return h('div',{class:'card form'},ti,fl('Minutes',es),fl('Difficulty',df),fl('Due',du),h('button',{class:'btn fill',onclick:go1},'Add'));
+}
 function vToday(){
   const w=h('div',{class:'wrap'});
   remBan(w);
@@ -706,8 +937,9 @@ function vToday(){
     pl.length?h('ul',{class:'list'},pl.map(b=>h('li',{class:b===nx?'up':''},
       h('label',{},h('input',{type:'checkbox','aria-label':'Done: '+(b.title||b.kind),onchange:e=>{const v=e.target.checked?1:0;upd('blocks',b.id,{done:v});link('blocks',b.id,v);}}),h('span',{class:'mut small'},b.start),h('span',{},b.title||b.kind)),
       b===nx?h('span',{class:'tag td'},'Up next'):null,
-      b===nx&&!t?h('button',{class:'btn s',onclick:()=>startFocus(bref(b),getDur())},I('play'),'Start'):null)))
+      b===nx&&!t?h('button',{class:'btn s',onclick:()=>startFocus(bref(b),bDur(b))},I('play'),'Start'):null)))
       :h('p',{class:'mut small'},any?'Everything planned for today is done.':'Nothing planned yet. Open the day to plan it.')));
+  w.append(taskAdd());
   if(xs.length)w.append(h('div',{class:'card'},h('h3',{},'Also on your list'),
     h('ul',{class:'list'},xs.map(x=>h('li',{class:x.done?'dn':''},
       h('label',{},h('input',{type:'checkbox',checked:!!x.done,onchange:e=>tdone(x,e.target.checked)}),x.title),
@@ -871,6 +1103,7 @@ function vAreas(){
 }
 function vLog(){
   const w=h('div',{class:'wrap'});
+  w.append(insCard());
   const xs=[...S.log].sort((a,b)=>a.day<b.day?1:a.day>b.day?-1:b.id-a.id).slice(0,100);
   if(!xs.length){w.append(h('div',{class:'card center mut'},'Nothing logged yet. Finished things show up here.'));return w;}
   const ds=[...new Set(xs.map(l=>l.day))];
@@ -898,11 +1131,11 @@ function strip(){
   if(up.length)b.append(h('div',{class:'tiles'},up.slice(0,3).map(tile)));
   return b;
 }
-function durRow(){
-  const cur=getDur();
+function durRow(b){
+  const cur=b?bDur(b):getDur(),pk=m=>{localStorage.setItem('last',m);if(b)localStorage.setItem('durb',b.id);render();};
   return h('div',{class:'chips'},
-    [25,50,90].map(m=>h('button',{class:'chip'+(cur===m?' on':''),'aria-pressed':cur===m?'true':'false',onclick:()=>{localStorage.setItem('last',m);render();}},m+' min')),
-    h('input',{type:'number',min:5,max:240,class:'num','aria-label':'Custom minutes',value:cur,onchange:e=>{localStorage.setItem('last',Math.max(5,Math.min(240,+e.target.value||25)));render();}}),
+    [...new Set([b&&+b.mins,25,50,90].filter(m=>m>0))].map(m=>h('button',{class:'chip'+(cur===m?' on':''),'aria-pressed':cur===m?'true':'false',onclick:()=>pk(m)},m+' min')),
+    h('input',{type:'number',min:5,max:240,class:'num','aria-label':'Custom minutes',inputmode:'numeric',autocomplete:'off',value:cur,onchange:e=>pk(Math.max(5,Math.min(240,+e.target.value||25)))}),
     h('span',{class:'small'},'minutes'));
 }
 function focusCard(t){
@@ -1032,9 +1265,9 @@ function vNow(){
   const b=pl[0],x=bref(b);
   w.append(h('div',{class:'hero'},
     h('div',{class:'ey'},'Next in your plan'),h('h1',{class:'big'},x.title),h('div',{class:'sub'},x.sub),
-    durRow(),
+    durRow(b),
     h('div',{class:'row'},
-      h('button',{class:'btn cta lg',onclick:()=>startFocus(x,getDur())},I('play'),'Start focus'),
+      h('button',{class:'btn cta lg',onclick:()=>startFocus(x,bDur(b))},I('play'),'Start focus'),
       h('button',{class:'btn ghost',onclick:()=>fin('blocks',b.id)},'Mark done'))));
   w.append(h('div',{class:'mut small center'},pl.length>1?(pl.length-1)+' more planned today.':'This is the last planned item today.'));
   return w;
@@ -1071,6 +1304,23 @@ function topicTog(t,on){
   upd('topics',t.id,{done:on?1:0});
   link('topics',t.id,on?1:0);
 }
+let tpA=null;
+function tpEd(c,t){
+  const es=estIn('e.g. 45…',t.mins),df=difSel(t.diff),du=h('input',{type:'date',value:today(),min:today(),'aria-label':'Due date'});
+  const ok=()=>{
+    const m=+es.value;
+    if(!(m>0)){toast('How long will it take? Enter the minutes.');es.focus();return;}
+    tpA=null;
+    add('tasks',{title:'Study: '+t.title,course_id:c.id,kind:'todo',due:cap(c.id,du.value||today()),est:m,diff:df.value});
+    toast('Added to your to-dos. It is planned into today if it is due today.');
+  };
+  es.addEventListener('keydown',e=>{if(e.key==='Enter')ok();if(e.key==='Escape'){tpA=null;render();}});
+  requestAnimationFrame(()=>{if(es.isConnected)es.focus();});
+  return h('div',{class:'bk-ed',style:'flex-basis:100%;padding-left:8px'},h('span',{class:'small',style:'flex-basis:100%'},'How long will it take?'),
+    h('label',{},'Minutes',es),h('label',{},'Difficulty',df),h('label',{},'Due',du),
+    h('button',{class:'btn s fill',onclick:ok},'Add to to-do'),
+    h('button',{class:'btn s ghost',onclick:()=>{tpA=null;render();}},'Cancel'));
+}
 function examCard(c){
   const ts=S.topics.filter(t=>t.course_id===c.id).sort((a,b)=>a.id-b.id),[a,b]=prog(c);
   return h('div',{class:'card'+(c.date&&dd(c.date)<0?' past':'')},
@@ -1083,6 +1333,8 @@ function examCard(c){
       h('span',{class:'boxes'},S.rounds.filter(r=>r.topic_id===t.id).map((r,i)=>h('input',{type:'checkbox',checked:!!r.done,'aria-label':'Round '+(i+1)+' of '+t.title,onchange:e=>upd('rounds',r.id,{done:e.target.checked?1:0})})),
         ),
       h('label',{},h('input',{type:'checkbox',checked:!!t.done,onchange:e=>topicTog(t,e.target.checked)}),t.title),
+      t.done?null:stk(t)?h('span',{class:'tag td'},'In to-do'):tpA===t.id?null:h('button',{class:'btn s ghost','aria-label':'Add '+t.title+' to to-do',onclick:()=>{tpA=t.id;render();}},'+ To-do'),
+      tpA===t.id&&!t.done&&!stk(t)?tpEd(c,t):null,
       h('button',{class:'x',title:'Remove topic','aria-label':'Remove topic',onclick:()=>del('topics',t.id,t.title||'item')},I('x'))))),
     dt('rd'+c.id,'',h('summary',{},'Study rounds'),h('p',{class:'mut small'},'Adds one more checkbox to every topic, for another pass of revision.'),
       h('button',{class:'btn s',disabled:!ts.length,onclick:async()=>{if(!ts.length)return;await api('POST','rounds',ts.map(t=>({topic_id:t.id,done:0})));await load();render();}},'+ Add round')),
@@ -1119,12 +1371,13 @@ function vTasks(){
   const ks=h('select',{'aria-label':'Type'},h('option',{value:'assignment'},'Assignment'),h('option',{value:'todo'},'To-do'));
   const du=h('input',{type:'date','aria-label':'Due date'});
   const as=asel(null);
+  const es=estIn(estPh()),df=difSel();
   const go1=()=>{
     if(!ti.value.trim())return;
-    add('tasks',{title:ti.value.trim(),course_id:cs.value?+cs.value:null,kind:ks.value,due:du.value||null,area_id:aid(as.value)});
+    add('tasks',{title:ti.value.trim(),course_id:cs.value?+cs.value:null,kind:ks.value,due:du.value||null,area_id:aid(as.value),est:+es.value>0?+es.value:null,diff:df.value});
   };
   ti.addEventListener('keydown',e=>{if(e.key==='Enter')go1();});
-  w.append(h('div',{class:'card form'},ti,cs,ks,du,as,h('button',{class:'btn fill',onclick:go1},'Add')));
+  w.append(h('div',{class:'card form'},ti,cs,ks,fl('Due',du),fl('Minutes',es),fl('Difficulty',df),as,h('button',{class:'btn fill',onclick:go1},'Add')));
   const groups=[...S.courses.map(c=>[c.name,c.id]),['General',null]];
   groups.forEach(([n,id])=>{
     const xs=S.tasks.filter(t=>(t.course_id||null)===id).sort((a,b)=>(a.done-b.done)||((a.due||'9')>(b.due||'9')?1:-1));
@@ -1245,16 +1498,16 @@ let dsel=today(),dpl=null,bkEd=null;
 const RMIN=15,FOCUS=90,BRK=20;
 const hm2m=s=>{const[a,b]=String(s||'0:0').split(':').map(Number);return a*60+b;};
 const m2hm=m=>pad(Math.floor(m/60))+':'+pad(m%60);
-function dwin(d){const x=S.days.find(y=>y.day===d);return{start:(x&&x.start)||'07:00',end:(x&&x.end)||'23:00'};}
+function dwin(d){const x=S.days.find(y=>y.day===d);return{start:(x&&x.start)||prefv('day_start','07:00'),end:(x&&x.end)||prefv('day_end','23:00')};}
 function freeMin(d){
   const w=dwin(d);
   return hm2m(w.end)-hm2m(w.start)-S.blocks.filter(b=>b.day===d&&b.kind==='fixed').reduce((a,b)=>a+(+b.mins||0),0);
 }
-function frees(d){
+function frees(d,ex){
   const w=dwin(d);
   const now=new Date(),nm=Math.ceil((now.getHours()*60+now.getMinutes())/RMIN)*RMIN;
   let segs=[[d===today()?Math.max(hm2m(w.start),nm):hm2m(w.start),hm2m(w.end)]];
-  S.blocks.filter(b=>b.day===d&&b.kind==='fixed').forEach(b=>{
+  S.blocks.filter(b=>b.day===d&&(b.kind==='fixed'||(ex&&!ex.has(b.id)))).forEach(b=>{
     const s=hm2m(b.start),e=s+(+b.mins||0),out=[];
     segs.forEach(([a,z])=>{
       if(e<=a||s>=z){out.push([a,z]);return;}
@@ -1265,9 +1518,9 @@ function frees(d){
   });
   return segs.filter(([a,z])=>z>a);
 }
-function fill(d,td){
+function fill(d,td,ex,only){
   td=td||today();
-  const out=[],skip=[],segs=frees(d);
+  const out=[],skip=[],segs=frees(d,ex);
   const first=(len,from)=>{for(const[a,z]of segs){const x=Math.ceil(Math.max(a,from||0)/RMIN)*RMIN;if(x+len<=z)return x;}return null;};
   const take=(x,len)=>{
     for(let i=0;i<segs.length;i++){
@@ -1276,9 +1529,20 @@ function fill(d,td){
     }
   };
   const put=b=>out.push(Object.assign({day:d,done:0},b));
-  const tk=t=>({title:t.title,mins:FOCUS,ref_kind:'task',ref_id:t.id});
-  const qk=q=>({title:'Quiz: '+q.title,mins:FOCUS,ref_kind:'quiz',ref_id:q.id});
-  [...S.routines].sort((a,b)=>((a.part==='pm')-(b.part==='pm'))||a.id-b.id).forEach(r=>{
+  const P=profile(),LN=Math.min(P.ready&&P.len?Math.round(P.len/RMIN)*RMIN:FOCUS,prefv('max_focus',999));
+  const sz=(m,df)=>P.ready?Math.max(5,Math.round(m*(P.mult[df]||1)/5)*5):m;
+  const dn=(rk,ri)=>ex?S.blocks.filter(b=>b.day===d&&b.done&&b.ref_kind===rk&&b.ref_id===ri).reduce((a,b)=>a+(+b.mins||0),0):0;
+  const chunk=(title,tot,rk,ri,df,full)=>{const o=[];let r=tot;full=full||tot;while(r>0){const k=Math.min(LN,r);o.push({title:title+(k<full?' (part)':''),mins:k,ref_kind:rk,ref_id:ri,df});r-=k;}return o;};
+  const tk=t=>{const f=t.est>0?sz(Math.ceil(t.est/5)*5,t.diff):LN;return chunk(t.title,f-dn('task',t.id),'task',t.id,t.diff,f);};
+  const qk=q=>chunk('Quiz: '+q.title,LN-dn('quiz',q.id),'quiz',q.id,'hard',LN);
+  const sc=(x,len,df)=>{let s=0,c=0;for(let m=x;m<x+len;m+=30){const v=P.hr[Math.floor(m/60)];s+=v==null?.5:v;c++;}s/=c;return(df==='easy'?1-s:s)-x/1e5;};
+  const pick=(len,df)=>{
+    if(!P.ready)return first(len);
+    let bx=null,bv=-9;
+    for(const[a,z]of segs)for(let x=Math.ceil(a/RMIN)*RMIN;x+len<=z;x+=RMIN){const v=sc(x,len,df);if(v>bv){bv=v;bx=x;}}
+    return bx;
+  };
+  (ex?[]:[...S.routines]).sort((a,b)=>((a.part==='pm')-(b.part==='pm'))||a.id-b.id).forEach(r=>{
     const x=first(RMIN,r.part==='pm'?19*60:7*60);
     if(x==null){skip.push({title:r.name,mins:RMIN});return;}
     take(x,RMIN);
@@ -1286,23 +1550,26 @@ function fill(d,td){
   });
   const opn=S.tasks.filter(t=>!t.done),qz=S.quizzes.filter(q=>!q.done&&q.date);
   const byD=(a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0;
-  const g1=[...opn.filter(t=>t.due&&t.due<td).map(t=>[t.due,tk(t)]),...qz.filter(q=>q.date<td).map(q=>[q.date,qk(q)])].sort(byD).map(x=>x[1]);
-  const g2=[...opn.filter(t=>t.due===td&&!t.title.startsWith('Revise: ')).map(tk),...qz.filter(q=>q.date===td).map(qk)];
+  const g1=[...opn.filter(t=>t.due&&t.due<td).map(t=>[t.due,tk(t)]),...qz.filter(q=>q.date<td).map(q=>[q.date,qk(q)])].sort(byD).flatMap(x=>x[1]);
+  const g2=[...opn.filter(t=>t.due===td&&!t.title.startsWith('Revise: ')).flatMap(tk),...qz.filter(q=>q.date===td).flatMap(qk)];
   const up=S.courses.filter(c=>c.date&&c.date>d).sort((a,b)=>a.date>b.date?1:-1);
-  const openT=c=>S.topics.filter(t=>t.course_id===c.id&&!t.done).sort((a,b)=>a.id-b.id);
+  const openT=c=>S.topics.filter(t=>t.course_id===c.id&&!t.done&&!stk(t)).sort((a,b)=>a.id-b.id);
   const lite=c=>openT(c).reduce((a,t)=>a+(+t.mins||FOCUS),0)<=120;
   const evc=up.find(c=>c.date===addD(d,1)),src=evc?[evc]:up.filter(c=>!lite(c));
-  const g3=[];let acc=0;const room=Math.max(0,freeMin(d));
+  const g3=[];let acc=0;const room=ex?segs.reduce((a,[p,q])=>a+q-p,0):Math.max(0,freeMin(d));
   outer:for(const c of src){
     const cd2=c.name.split(' ')[0];
     for(const t of openT(c)){
-      let r=+t.mins||FOCUS;const full=r;
-      while(r>0){if(acc>=room)break outer;const k=Math.min(FOCUS,r);g3.push({title:cd2+': '+t.title+(k<full?' (part)':''),mins:k,ref_kind:'topic',ref_id:t.id});r-=k;acc+=k;}
+      let r=sz(+t.mins||FOCUS,t.diff);const full=r;
+      if(ex)r-=S.blocks.filter(b=>b.day===d&&b.done&&b.ref_kind==='topic'&&b.ref_id===t.id).reduce((a,b)=>a+(+b.mins||0),0);
+      while(r>0){if(acc>=room)break outer;const k=Math.min(LN,r);g3.push({title:cd2+': '+t.title+(k<full?' (part)':''),mins:k,ref_kind:'topic',ref_id:t.id,df:t.diff});r-=k;acc+=k;}
     }
   }
-  [...g1,...g2,...g3].forEach(it=>{
-    const x=first(it.mins);
-    if(x==null){skip.push({title:it.title,mins:it.mins});return;}
+  const kc={};
+  if(ex)S.blocks.filter(b=>b.day===d&&b.kind==='focus'&&!b.done&&!ex.has(b.id)&&b.ref_id).forEach(b=>{const k=b.ref_kind+':'+b.ref_id;kc[k]=(kc[k]||0)+1;});
+  [...g1,...g2,...g3].filter(it=>it.ref_kind==='task').filter(it=>{const k=it.ref_kind+':'+it.ref_id;if(kc[k]>0){kc[k]--;return false;}return true;}).forEach(it=>{
+    const x=pick(it.mins,it.df);
+    if(x==null){skip.push({title:it.title,mins:it.mins,ref_kind:it.ref_kind,ref_id:it.ref_id});return;}
     take(x,it.mins);
     put({start:m2hm(x),mins:it.mins,kind:'focus',title:it.title,ref_kind:it.ref_kind,ref_id:it.ref_id});
     if(segs.some(([a,z])=>a<=x+it.mins&&x+it.mins+BRK<=z)){
@@ -1590,6 +1857,8 @@ function al(a){
   if(a.op==='add_task')return'Add task "'+a.title+'"'+(a.course_id?' for '+cname(a.course_id):'')+(a.due?', due '+fd(a.due):'');
   if(a.op==='add_quiz')return'Add quiz "'+a.title+'" for '+cname(a.course_id)+' on '+fd(a.date)+', covering '+(a.topic_ids||[]).length+' topics';
   if(a.op==='add_today')return'Add "'+a.title+'" to Today';
+  if(a.op==='remember')return'Remember: '+a.text;
+  if(a.op==='set_pref')return'Set '+({day_start:'day start',day_end:'day end',max_focus:'longest focus block'}[a.key]||a.key)+' to '+a.value+(a.key==='max_focus'?' min':'');
   return a.op;
 }
 function cmsg(m){
@@ -1613,7 +1882,7 @@ async function csend(v){
   v=(v||'').trim();if(!v||cbusy)return;
   CH.push({role:'user',content:v});cta.value='';cerr='';cbusy=1;csave();crender();
   try{
-    const r=await api('POST','ai/chat',{day:today(),messages:CH.slice(-12).map(m=>({role:m.role,content:m.content}))});
+    const r=await api('POST','ai/chat',{day:today(),profile:pSum(),messages:CH.slice(-12).map(m=>({role:m.role,content:m.content}))});
     if(!r||typeof r.reply!=='string')throw 0;
     const a=Array.isArray(r.actions)?r.actions:[];
     CH.push({role:'assistant',content:r.reply,acts:a,sel:a.map(()=>true)});
@@ -1628,6 +1897,12 @@ async function cdo(a,nt){
   if(a.op==='add_task'){await api('POST','tasks',{title:a.title,course_id:a.course_id||null,kind:'todo',due:a.due?cap(a.course_id,a.due):null});return 1;}
   if(a.op==='add_quiz'){const r=await api('POST','quizzes',{course_id:a.course_id,title:a.title,date:a.date});if(r&&r.id&&a.topic_ids&&a.topic_ids.length)await api('POST','qt',a.topic_ids.map(id=>({quiz_id:r.id,topic_id:id})));return 1;}
   if(a.op==='add_today'){await load();if(tdy().length>=3){nt.push('Today already had 3, so "'+a.title+'" was skipped.');return 0;}await api('POST','today',{day:today(),title:a.title,sort:tdy().length,done:0});return 1;}
+  if(a.op==='remember'){await api('POST','memory',{text:a.text});await load();return 1;}
+  if(a.op==='set_pref'){
+    const s=a.key==='day_start'?a.value:prefv('day_start','07:00'),e=a.key==='day_end'?a.value:prefv('day_end','23:00');
+    if(e<=s){nt.push('The day must end after it starts, so that change was skipped.');return 0;}
+    await setPref(a.key,a.value);return 1;
+  }
   return 0;
 }
 async function capply(m){
@@ -1644,14 +1919,33 @@ async function capply(m){
 clay();crender();
 
 $('#mini').addEventListener('click',()=>go('today'));
+$('#rfr').addEventListener('click',()=>location.reload());
+async function chkVer(){
+  if(drag||PD.size||isF(document.activeElement))return;
+  try{
+    const r=await fetch('/',{cache:'no-store'});
+    if(!r.ok)return;
+    const x=await r.text(),me=document.querySelector('script:not([src])').textContent;
+    if(x.includes(me))return;
+    if(Date.now()-(+sessionStorage.getItem('vr')||0)<6e4)return;
+    sessionStorage.setItem('vr',Date.now());
+    location.reload();
+  }catch(e){}
+}
 (async()=>{
   if(location.hash!=='#'+tab)history.replaceState(null,'','#'+tab);
   try{await load();}catch(e){toast('Could not load your data. Check the connection and refresh.',{err:1});}
   theme();mqListen(theme);
-  pullTm();setInterval(pullTm,15000);
+  await pullTm();cleanSess();
+  setInterval(()=>{if(!document.hidden)kick();},60000);kick();
+  setInterval(pullTm,15000);
   setInterval(pullAll,30000);
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden){pullTm();pullAll();}});
-  window.addEventListener('focus',()=>{pullTm();pullAll();});
+  const wake=()=>{pullTm();pullAll();chkVer();};
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)wake();});
+  window.addEventListener('focus',wake);
+  window.addEventListener('pageshow',e=>{if(e.persisted)wake();});
+  setInterval(()=>{if(!document.hidden)chkVer();},3e5);
+  chkVer();
   render();tick();crender();
 })();
 </script>
