@@ -16,7 +16,7 @@ body{padding:12px 16px}
 .cell{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:var(--muted);max-width:140px;word-break:break-all;text-align:center}
 canvas.av{image-rendering:pixelated;border:1px solid var(--line);background-color:#fff;background-image:linear-gradient(45deg,#ddd 25%,transparent 25%,transparent 75%,#ddd 75%),linear-gradient(45deg,#ddd 25%,transparent 25%,transparent 75%,#ddd 75%);background-size:16px 16px;background-position:0 0,8px 8px}
 #main{margin-bottom:16px}
-#miss{font-size:12px;color:var(--muted);border:1px solid var(--line);padding:8px;margin-top:16px;word-break:break-all}
+#miss{font-size:12px;color:var(--muted);border:1px solid var(--line);padding:8px;margin-top:16px}
 </style>
 </head>
 <body>
@@ -27,20 +27,22 @@ canvas.av{image-rendering:pixelated;border:1px solid var(--line);background-colo
 <div id="miss"></div>
 <script type="module">
 import loadAll from '/town/art/index.js';
-import { has, decode } from '/town/art/pixel.js';
 import { SKINS, HAIR_NAMES } from '/town/art/palette.js';
+import { getAvatarFrame, playAnim, drawAvatar, portrait } from '/town/avatar.js';
+import oa from '/town/art/outfits_a.js';
+import ob from '/town/art/outfits_b.js';
+import acc from '/town/art/accessories.js';
 
-const S = 8;
-const W = 16;
-const H = 24;
-const st = { skin: 0, hair: 0, hs: 1, outfit: 'casual', acc: '', dir: 'd', pose: 'walk', play: true };
-const miss = new Set();
-const cache = new Map();
-let mods = {};
-let outfits = {};
-let accs = [];
-let tick = 0;
+const S = 4;
+const OUT = Object.keys({ ...oa.meta.outfits, ...ob.meta.outfits });
+const ACC = acc.meta.items;
+const ANIMS = ['walk', 'idle', 'sit_study', 'break', 'cheer', 'knock'];
+const LABEL = { walk: 'walk', idle: 'idle', sit_study: 'sit', break: 'break', cheer: 'cheer', knock: 'knock' };
+const st = { skin: 1, hair: 1, hair_color: 1, outfit: 'outfit:casual', accessory: '', dir: 'd', anim: 'walk', play: true };
+const state = { anim: 'walk', t: 0, frame: 0, dir: 'd' };
 let mainCv = null;
+let last = 0;
+const rnd = (n) => 1 + Math.floor(Math.random() * n);
 
 const el = (t, a, ...k) => {
   const n = document.createElement(t);
@@ -49,87 +51,22 @@ const el = (t, a, ...k) => {
   return n;
 };
 
-const DIRS = ['d', 'u', 'l', 'r'];
-const POSES = ['walk', 'walk.0', 'walk.1', 'walk.2', 'walk.3', 'idle', 'sit_study', 'break', 'cheer', 'knock'];
-
-// Decode a sprite with given rows, cached by key.
-function dec(key, spr, o) {
-  const k = key + '|' + JSON.stringify(o);
-  let cv = cache.get(k);
-  if (!cv) { cv = decode(spr, o, key); cache.set(k, cv); }
-  return cv;
+function look(o) {
+  const l = { ...st, ...o };
+  return { skin: l.skin, hair: l.hair, hair_color: l.hair_color, outfit: l.outfit, accessory: l.accessory || null };
 }
 
-// Draw a registered sprite by id; a missing id is recorded and skipped.
-function lay(ctx, id, x, y, o) {
-  if (!has(id)) { miss.add(id); return; }
-  ctx.drawImage(dec(id, mods.all[id], o), x, y);
+function randLook() {
+  return {
+    skin: rnd(6), hair: rnd(8), hair_color: rnd(8),
+    outfit: 'outfit:' + OUT[Math.floor(Math.random() * OUT.length)],
+    accessory: Math.random() < 0.2 ? null : 'acc:' + ACC[Math.floor(Math.random() * ACC.length)],
+  };
 }
 
-// Body sprite with legs recoloured per bottom type (L marks leg pixels).
-function body(id, bottom, o) {
-  const spr = mods.all[id];
-  if (!has(id)) { miss.add(id); return null; }
-  const cut = { pants: 99, shorts: 21, skirt: 22 }[bottom] || 0;
-  const rows = spr.rows.map((r, i) => (i >= 18 && i >= cut ? r.replaceAll('L', '2') : r));
-  return dec(id + '#' + bottom, { w: spr.w, h: spr.h, rows }, o);
-}
-
-function frameOf(look, t) {
-  const dir = look.dir === 'r' ? 'l' : look.dir;
-  const m = /^walk\.(\d)$/.exec(look.pose);
-  const an = mods.anims;
-  let fr;
-  let d = dir;
-  if (m) fr = an['walk.' + dir].frames[+m[1]];
-  else if (look.pose === 'walk') fr = an['walk.' + dir].frames[t % 4];
-  else if (look.pose === 'idle') {
-    if (dir === 'd') fr = an['idle.d'].frames[Math.floor(t * 2 / 8) % 2];
-    else fr = an['walk.' + dir].frames[0];
-  } else {
-    const a = an[look.pose];
-    d = look.pose === 'knock' ? 'u' : 'd';
-    fr = a.frames[Math.floor(t * a.fps / 8) % a.frames.length];
-  }
-  return { fr, d, flip: look.dir === 'r' && d === 'l' };
-}
-
-function compose(look, t) {
-  const cv = document.createElement('canvas');
-  cv.width = W;
-  cv.height = H;
-  const ctx = cv.getContext('2d');
-  const { fr, d, flip } = frameOf(look, t);
-  const of = outfits[look.outfit];
-  const o = { skin: look.skin, hair: look.hair, colors: of ? of.c : undefined, flip };
-  const hy = fr.hy || 0;
-  const ty = fr.ty || 0;
-  const hx = fr.hx || 0;
-  const tx = fr.tx || 0;
-  const hs = 'hair.' + look.hs + '.' + d;
-  lay(ctx, 'shadow', 2, 21, o);
-  lay(ctx, hs + '.back', hx, hy, o);
-  const b = body(fr.body, of ? of.bottom : 'pants', o);
-  if (b) ctx.drawImage(b, 0, 0);
-  if (of && ['skirt', 'dress', 'robe'].includes(of.bottom)) {
-    const bid = of.top.replace('.top', '.bottom') + '.' + d;
-    if (has(bid)) lay(ctx, bid, 0, 14, o);
-    else if (of.bottom !== 'skirt') miss.add(bid);
-  }
-  lay(ctx, 'head.' + d, 2 + hx, 3 + hy, o);
-  if (of) lay(ctx, of.top + '.' + d, tx, 13 + ty, o);
-  lay(ctx, hs + '.front', hx, hy, o);
-  if (look.acc) lay(ctx, 'acc.' + look.acc + '.' + d, hx, hy, o);
-  if (fr.prop) {
-    const p = fr.prop;
-    lay(ctx, p.id, flip ? W - 8 - p.x : p.x, p.y, o);
-  }
-  return cv;
-}
-
-function paint(cv, src) {
-  cv.width = W * S;
-  cv.height = H * S;
+function paint(cv, src, w, h) {
+  cv.width = w * S;
+  cv.height = h * S;
   const ctx = cv.getContext('2d');
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, cv.width, cv.height);
@@ -138,74 +75,113 @@ function paint(cv, src) {
 
 const canvas = () => el('canvas', { class: 'av' });
 
-function showMiss() {
-  const list = [...miss].sort();
-  document.getElementById('miss').replaceChildren(el('b', null, 'missing: '), list.length ? list.join(', ') : 'none');
-}
-
 function sel(label, list, key) {
   const s = el('select');
   list.forEach(([v, t]) => { const o = el('option', { value: v }, t); if (String(st[key]) === String(v)) o.selected = true; s.append(o); });
-  s.onchange = () => { st[key] = /^\d+$/.test(s.value) ? +s.value : s.value; draw(); };
+  s.onchange = () => { st[key] = /^\d+$/.test(s.value) ? +s.value : s.value; if (key === 'anim' || key === 'dir') { state.anim = st.anim; state.dir = st.dir; state.t = 0; state.frame = 0; } draw(); };
   return el('label', null, label, s);
 }
 
-function grid(title, items) {
+function cell(title, cv) {
+  return el('div', { class: 'cell' }, cv, el('span', null, title));
+}
+
+function randomSix() {
   const g = el('div', { class: 'grid' });
-  for (const [id, look] of items) {
+  for (let i = 0; i < 6; i++) {
+    const l = randLook();
     const cv = canvas();
-    try { paint(cv, compose(look, 0)); } catch (e) { g.append(el('div', { class: 'cell' }, 'error: ' + e.message, el('span', null, id))); continue; }
-    g.append(el('div', { class: 'cell' }, cv, el('span', null, id)));
+    paint(cv, getAvatarFrame(l, 'idle', 'd', 0), 16, 24);
+    const pc = canvas();
+    paint(pc, portrait(l), 32, 32);
+    g.append(cell(l.outfit + ' ' + (l.accessory || ''), cv), cell('portrait', pc));
   }
-  return el('section', null, el('h2', null, title + ' (' + items.length + ')'), g);
+  return el('section', null, el('h2', null, '6 random looks'), g);
+}
+
+function allAnims() {
+  const g = el('div', { class: 'grid' });
+  const l = look();
+  const row = (a, d, n) => {
+    for (let f = 0; f < n; f++) {
+      const cv = canvas();
+      paint(cv, getAvatarFrame(l, a, d, f), 16, 24);
+      g.append(cell(a + '.' + d + ' ' + f, cv));
+    }
+  };
+  for (const d of ['d', 'u', 'l', 'r']) row('walk', d, 4);
+  row('idle', 'd', 2);
+  row('sit_study', 'd', 3);
+  row('break', 'd', 3);
+  row('cheer', 'd', 4);
+  row('knock', 'u', 3);
+  return el('section', null, el('h2', null, 'animation frames (current look)'), g);
+}
+
+function stress() {
+  let n = 0;
+  try {
+    for (let i = 0; i < 200; i++) {
+      const l = randLook();
+      for (const a of ANIMS) for (const d of ['d', 'u', 'l', 'r']) getAvatarFrame(l, a, d, i % 4);
+      portrait(l);
+      n++;
+    }
+    for (let sk = 1; sk <= 6; sk++) for (let h = 1; h <= 8; h++) for (let c = 1; c <= 8; c++) {
+      for (const o of OUT) getAvatarFrame({ skin: sk, hair: h, hair_color: c, outfit: 'outfit:' + o, accessory: 'acc:' + ACC[(sk + h + c) % ACC.length] }, 'walk', 'd', 1);
+    }
+    for (const o of OUT) for (const a of ACC) for (const d of ['d', 'u', 'l']) getAvatarFrame({ skin: 3, hair: 2, hair_color: 4, outfit: 'outfit:' + o, accessory: 'acc:' + a }, 'idle', d, 0);
+    return 'ok ' + n + ' random looks, no errors';
+  } catch (e) {
+    console.error(e);
+    return 'ERROR ' + e.message;
+  }
 }
 
 function draw() {
   const bar = document.getElementById('bar');
   const btn = el('button', { type: 'button' }, st.play ? 'pause' : 'play');
   btn.onclick = () => { st.play = !st.play; draw(); };
+  const rb = el('button', { type: 'button' }, 'random');
+  rb.onclick = () => { Object.assign(st, randLook()); st.accessory = st.accessory || ''; draw(); };
+  const tb = el('button', { type: 'button' }, 'run 200 random');
+  tb.onclick = () => { document.getElementById('miss').replaceChildren(stress()); };
   bar.replaceChildren(
-    sel('Skin', SKINS.map((_, i) => [i, 'tone ' + (i + 1)]), 'skin'),
-    sel('Hair style', HAIR_NAMES.map((_, i) => [i + 1, 'style ' + (i + 1)]), 'hs'),
-    sel('Hair colour', HAIR_NAMES.map((n, i) => [i, n]), 'hair'),
-    sel('Outfit', Object.keys(outfits).map((k) => [k, k]), 'outfit'),
-    sel('Accessory', [['', 'none'], ...accs.map((a) => [a, a])], 'acc'),
-    sel('Direction', DIRS.map((d) => [d, d]), 'dir'),
-    sel('Pose', POSES.map((p) => [p, p]), 'pose'),
-    btn,
+    sel('Skin', SKINS.map((_, i) => [i + 1, 'tone ' + (i + 1)]), 'skin'),
+    sel('Hair style', HAIR_NAMES.map((_, i) => [i + 1, 'style ' + (i + 1)]), 'hair'),
+    sel('Hair colour', HAIR_NAMES.map((n, i) => [i + 1, n]), 'hair_color'),
+    sel('Outfit', OUT.map((k) => ['outfit:' + k, k]), 'outfit'),
+    sel('Accessory', [['', 'none'], ...ACC.map((a) => ['acc:' + a, a])], 'accessory'),
+    sel('Direction', ['d', 'u', 'l', 'r'].map((d) => [d, d]), 'dir'),
+    sel('Animation', ANIMS.map((a) => [a, LABEL[a]]), 'anim'),
+    btn, rb, tb,
   );
   mainCv = canvas();
   document.getElementById('main').replaceChildren(mainCv);
-  const base = { skin: st.skin, hair: st.hair, hs: st.hs, outfit: st.outfit, acc: st.acc, dir: 'd', pose: 'walk' };
-  document.getElementById('out').replaceChildren(
-    grid('Outfits', Object.keys(outfits).map((k) => [k, { ...base, outfit: k }])),
-    grid('Hair styles', HAIR_NAMES.map((_, i) => ['hair.' + (i + 1), { ...base, hs: i + 1 }])),
-    grid('Accessories', accs.map((a) => [a, { ...base, acc: a }])),
-  );
+  document.getElementById('out').replaceChildren(randomSix(), allAnims());
   frame();
-  showMiss();
 }
 
 function frame() {
   if (!mainCv) return;
-  const n = miss.size;
-  try { paint(mainCv, compose(st, tick)); } catch (e) { console.warn('avatar', e); }
-  if (miss.size !== n) showMiss();
+  paint(mainCv, getAvatarFrame(look(), state.anim, state.dir, state.frame), 16, 24);
 }
 
-setInterval(() => {
-  if (!st.play) return;
-  tick++;
-  frame();
-}, 125);
+function loop(ts) {
+  const dt = Math.min(0.25, (ts - last) / 1000);
+  last = ts;
+  if (st.play) {
+    playAnim(state, dt);
+    frame();
+  }
+  requestAnimationFrame(loop);
+}
 
-loadAll().then(async () => {
-  const [body_, hair, acc, oa, ob] = await Promise.all(['body', 'hair', 'accessories', 'outfits_a', 'outfits_b'].map((n) => import(`/town/art/${n}.js`).then((m) => m.default || m)));
-  mods = { anims: body_.anims, all: Object.assign({}, body_.sprites, hair.sprites, acc.sprites, oa.sprites, ob.sprites) };
-  outfits = {};
-  for (const m of [oa, ob]) for (const [k, v] of Object.entries(m.meta.outfits)) outfits[k] = v;
-  accs = acc.meta.items;
+loadAll().then(() => {
   draw();
+  document.getElementById('miss').replaceChildren(stress());
+  window.drawAvatar = drawAvatar;
+  requestAnimationFrame(loop);
 });
 </script>
 </body>
