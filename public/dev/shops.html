@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nudge shops and hall preview</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<script>try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="stylesheet" href="/css/app.css">
+<style>
+body{padding:12px 16px}
+#tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+#tabs a{padding:8px 12px;border:1px solid var(--line);border-radius:8px;text-decoration:none;min-height:36px}
+#tabs a[aria-current]{font-weight:700}
+#stage{position:relative}
+canvas#cv{display:block;width:min(100%,960px);height:min(70vh,560px);image-rendering:pixelated;border:1px solid var(--line);background:#222}
+#msg{font-size:12px;color:var(--muted);margin-top:8px}
+</style>
+</head>
+<body>
+<h1>Nudge shops and hall preview</h1>
+<div id="tabs"></div>
+<div id="stage"><canvas id="cv" tabindex="0" aria-label="Scene preview"></canvas></div>
+<div id="layer"></div>
+<div id="msg"></div>
+<script type="module">
+import loadAll from '/town/art/index.js';
+import { createEngine } from '/town/engine.js';
+import * as ui from '/js/ui.js';
+
+const KINDS = ['boutique', 'homestore', 'bakery', 'hall'];
+const kind = KINDS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'boutique';
+const msg = document.getElementById('msg');
+const say = (t) => { msg.textContent = t; };
+
+const tabs = document.getElementById('tabs');
+for (const k of KINDS) {
+  const a = document.createElement('a');
+  a.href = '#' + k;
+  a.textContent = k;
+  if (k === kind) a.setAttribute('aria-current', 'page');
+  a.addEventListener('click', () => setTimeout(() => location.reload(), 0));
+  tabs.append(a);
+}
+
+const mk = (id, name, skin, hair, outfit) => ({ id, name, look: { skin, hair, hair_color: (id % 6) + 1, outfit, accessory: null } });
+const OUT = ['outfit:hoodie', 'outfit:tee', 'outfit:dress'];
+const fakeShop = (k) => [
+  { ...mk(2, 'Mira', 2, 3, OUT[0]), x: 8.5, y: 9.5, dir: 'u', a: 'idle', place: 'shop:' + k, fed: true },
+  { ...mk(3, 'Jo', 4, 1, OUT[1]), x: 12.5, y: 7.5, dir: 'l', a: 'walk', place: 'shop:' + k },
+];
+
+// fake websocket for the hall: answers with an "inside" snapshot
+class FakeWS {
+  constructor() {
+    setTimeout(() => {
+      if (this.onopen) this.onopen();
+      const members = [];
+      for (let i = 0; i < 9; i++) {
+        members.push({ ...mk(10 + i, 'Friend' + i, (i % 5) + 1, i % 4, OUT[i % 3]), st: i % 3 ? 'focus' : 'break', left: 600, act: ['active', 'idle', 'away'][i % 3], vp: 20 + i * 8, place: 'hall' });
+      }
+      setTimeout(() => { if (this.onmessage) this.onmessage({ data: JSON.stringify({ t: 'inside', house: 0, members }) }); }, 20);
+    }, 20);
+  }
+  send() {}
+  close() {}
+}
+globalThis.WebSocket = FakeWS;
+
+const _fetch = globalThis.fetch.bind(globalThis);
+globalThis.fetch = (u, o) => {
+  if (String(u).startsWith('/api/town/hall')) {
+    const list = [{ id: 5, name: 'Mira', look: {}, mins: 120, act: 'active' }, { id: 6, name: 'Jo', look: {}, mins: 75, act: 'idle', course: 'CS101' }];
+    return Promise.resolve(new Response(JSON.stringify({ day: '2026-11-08', list }), { headers: { 'content-type': 'application/json' } }));
+  }
+  return _fetch(u, o);
+};
+
+(async () => {
+  try {
+    await loadAll();
+    const { openShopScene } = await import('/town/shops.js');
+    const { openHallScene } = await import('/town/hall.js');
+    const canvas = document.getElementById('cv');
+    const engine = createEngine(canvas);
+    const handlers = new Set();
+    const net = {
+      send: (m) => { say('sent: ' + JSON.stringify(m)); return true; },
+      on: (f) => { handlers.add(f); return () => handlers.delete(f); },
+    };
+    const ctx = {
+      me: { id: 1, avatar: { skin: 2, hair: 2, hair_color: 3, outfit: 'outfit:hoodie', accessory: null, name: 'You' }, balance: 100, wardrobe: [], pantry: { 'food:cookie': 2 }, fed_until: 0, plot: { district: 1, slot: 0 } },
+      refresh: async () => ctx.me,
+      ui, engine, net,
+      toast: (t) => say('toast: ' + t),
+      returnToStreet: async () => { say('returned to street'); },
+    };
+    const run = kind === 'hall' ? openHallScene(ctx) : openShopScene(ctx, kind);
+    setTimeout(() => {
+      for (const f of handlers) f({ t: 'snap', you: 1, district: 1, players: fakeShop(kind) });
+    }, 100);
+    await run;
+  } catch (e) {
+    say('error: ' + e.message);
+    console.error(e);
+  }
+})();
+</script>
+</body>
+</html>
