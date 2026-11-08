@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nudge art gallery</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<script>try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="stylesheet" href="/css/app.css">
+<style>
+body{padding:12px 16px}
+#bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+#bar label{display:flex;align-items:center;gap:6px;font-size:13px}
+#bar select,#bar input{width:auto;min-height:36px}
+.grid{display:flex;flex-wrap:wrap;gap:10px}
+.cell{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:var(--muted);max-width:140px;word-break:break-all;text-align:center}
+.cell canvas{image-rendering:pixelated;border:1px solid var(--line);background-color:#fff;background-image:linear-gradient(45deg,#ddd 25%,transparent 25%,transparent 75%,#ddd 75%),linear-gradient(45deg,#ddd 25%,transparent 25%,transparent 75%,#ddd 75%);background-size:16px 16px;background-position:0 0,8px 8px}
+body.dk .cell canvas{background-color:#222;background-image:linear-gradient(45deg,#333 25%,transparent 25%,transparent 75%,#333 75%),linear-gradient(45deg,#333 25%,transparent 25%,transparent 75%,#333 75%)}
+body.dk{background:#111;color:#eee}
+</style>
+</head>
+<body>
+<h1>Nudge art gallery</h1>
+<div id="bar"></div>
+<div id="out"></div>
+<script type="module">
+import loadAll from '/town/art/index.js';
+import { getSprite, getAnim, ids, animIds } from '/town/art/pixel.js';
+import { SKINS, HAIRS, HAIR_NAMES, OUTFIT } from '/town/art/palette.js';
+
+const S = 4;
+const out = document.getElementById('out');
+const bar = document.getElementById('bar');
+const st = { skin: 0, hair: 0, c: 'pink', dark: false, walk: '' };
+const live = [];
+let tick = 0;
+
+const el = (t, a, ...k) => {
+  const n = document.createElement(t);
+  for (const key in a || {}) n.setAttribute(key, a[key]);
+  n.append(...k.filter((x) => x != null));
+  return n;
+};
+const opts = () => ({ skin: st.skin, hair: st.hair, colors: [st.c, 'r', 'o'] });
+
+function paint(cv, src) {
+  cv.width = src.width * S;
+  cv.height = src.height * S;
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.drawImage(src, 0, 0, cv.width, cv.height);
+}
+
+function sel(label, list, key) {
+  const s = el('select');
+  list.forEach(([v, t]) => { const o = el('option', { value: v }, t); if (String(st[key]) === String(v)) o.selected = true; s.append(o); });
+  s.onchange = () => { st[key] = isNaN(s.value) || s.value === '' ? s.value : +s.value; draw(); };
+  return el('label', null, label, s);
+}
+
+function cell(id, f) {
+  const cv = el('canvas');
+  try { paint(cv, getSprite(id, opts())); } catch (e) { return el('div', { class: 'cell' }, 'error: ' + e.message, el('span', null, id)); }
+  if (f) f(cv);
+  return el('div', { class: 'cell' }, cv, el('span', null, id));
+}
+
+function draw() {
+  document.body.classList.toggle('dk', st.dark);
+  live.length = 0;
+  const all = ids();
+  const an = animIds();
+  bar.replaceChildren(
+    sel('Skin', SKINS.map((_, i) => [i, 'tone ' + (i + 1)]), 'skin'),
+    sel('Hair', HAIRS.map((_, i) => [i, HAIR_NAMES[i]]), 'hair'),
+    sel('Outfit', Object.keys(OUTFIT).map((k) => [k, k]), 'c'),
+    sel('Background', [[0, 'light'], [1, 'dark']].map(([v, t]) => [v, t]), 'bgx'),
+    sel('Walk preview', [['', 'none'], ...an.map((a) => [a, a])], 'walk'),
+  );
+  bar.children[3].firstChild.nextSibling.value = st.dark ? '1' : '0';
+  bar.children[3].firstChild.nextSibling.onchange = (e) => { st.dark = e.target.value === '1'; draw(); };
+  if (!all.length) { out.replaceChildren(el('p', { class: 'muted' }, 'no art loaded')); return; }
+  const secs = [];
+  if (st.walk) {
+    const a = getAnim(st.walk);
+    if (a) secs.push(el('section', null, el('h2', null, 'Walk preview'), el('div', { class: 'grid' }, cell(a.frames[0] && (a.frames[0].body || a.frames[0]), (cv) => live.push({ cv, a })))));
+  }
+  const groups = {};
+  all.forEach((id) => { const g = id.split('.')[0]; (groups[g] = groups[g] || []).push(id); });
+  for (const g of Object.keys(groups)) secs.push(el('section', null, el('h2', null, g), el('div', { class: 'grid' }, ...groups[g].map((id) => cell(id)))));
+  if (an.length) {
+    const g = el('div', { class: 'grid' });
+    an.forEach((id) => {
+      const a = getAnim(id);
+      const f0 = a.frames[0] && (a.frames[0].body || a.frames[0]);
+      if (f0) g.append(cell(f0, (cv) => live.push({ cv, a })));
+      g.lastChild.lastChild.textContent = id + ' @' + a.fps + 'fps';
+    });
+    secs.push(el('section', null, el('h2', null, 'animations'), g));
+  }
+  out.replaceChildren(...secs);
+}
+
+function loop(t) {
+  live.forEach(({ cv, a }) => {
+    const n = a.frames.length;
+    const k = Math.floor(t / 1000 * (a.fps || 1));
+    const i = a.loop === false ? Math.min(k % (n + 2), n - 1) : k % n;
+    const f = a.frames[i];
+    const id = f && (f.body || f);
+    try { paint(cv, getSprite(id, opts())); } catch (e) {}
+  });
+  requestAnimationFrame(loop);
+}
+
+loadAll().then(draw);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
