@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Engine dev</title>
+<style>
+html,body{margin:0;height:100%;background:#1a2352;overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+#fps{position:fixed;top:6px;left:8px;font:12px monospace;color:#fff;background:#0008;padding:2px 6px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="fps">fps</div>
+<script type="module">
+import { createEngine, moveController, sortByY, TILE } from '/town/engine.js'
+import { astar, smooth } from '/town/path.js'
+
+const W = 40, H = 30
+const grid = Array.from({ length: H }, (_, y) => Array.from({ length: W }, (_, x) => {
+  if (x > 8 && x < 14 && y > 5 && y < 20) return 6
+  if (y > 22 && y < 25 && x > 3 && x < 30) return 6
+  if (x === 20 && y === 24) return 10
+  return (x + y) % 2
+}))
+const cols = ['#7CC24E', '#BFE07A', '#2B7A4B', '#94BFF0', '#D79A63', '#F6DDB8', '#3F63B0', '#EBC08A', '#E0507A', '#A650A0', '#B26F45']
+const me = moveController({ speed: 5, x: 20.5, y: 14.5 })
+let path = null
+const canvas = document.getElementById('c')
+const eng = createEngine(canvas)
+const scene = {
+  size: { w: W, h: H },
+  update(dt) {
+    me.update(dt, eng.input.dir())
+  },
+  draw(ctx, cam, t) {
+    const x0 = Math.max(0, Math.floor(cam.x / TILE)), y0 = Math.max(0, Math.floor(cam.y / TILE))
+    const x1 = Math.min(W, Math.ceil((cam.x + cam.w) / TILE)), y1 = Math.min(H, Math.ceil((cam.y + cam.h) / TILE))
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+      ctx.fillStyle = cols[grid[y][x]]
+      ctx.fillRect(x * TILE - cam.x, y * TILE - cam.y, TILE, TILE)
+    }
+    const list = [{ y: me.y * TILE }]
+    for (const o of sortByY(list)) {
+      const px = Math.round(me.x * TILE - cam.x), py = Math.round(o.y - cam.y)
+      ctx.fillStyle = '#2A1F2D'
+      ctx.fillRect(px - 5, py - 11, 10, 11)
+      ctx.fillStyle = '#FF8FA8'
+      ctx.fillRect(px - 4, py - 10, 8, 9)
+    }
+  },
+}
+const pos = { get x() { return me.x * TILE }, get y() { return me.y * TILE - 6 } }
+eng.camera.follow(pos)
+eng.setScene(scene)
+eng.onTap((tx, ty) => {
+  const from = { x: Math.floor(me.x), y: Math.floor(me.y) }
+  const p = astar(grid, W, H, from, { x: tx, y: ty })
+  if (p) me.setPath(p)
+})
+eng.start()
+const fps = document.getElementById('fps')
+setInterval(() => { fps.textContent = eng.fps + ' fps, scale ' + eng.scale + (eng.reduced ? ', reduced' : '') }, 250)
+</script>
+</body>
+</html>
