@@ -149,6 +149,13 @@ export async function changePassword(db, userId, oldPw, newPw) {
 
 export async function deleteAccount(db, userId) {
   const st = TABLES.map((t) => db.prepare(`DELETE FROM ${t} WHERE user_id=?`).bind(userId));
+  for (const t of ['coin_ledger', 'wardrobe', 'pantry', 'user_status', 'session_active', 'checkins', 'avatar', 'houses', 'house_items']) {
+    st.push(db.prepare(`DELETE FROM ${t} WHERE user_id=?`).bind(userId));
+  }
+  st.push(db.prepare('DELETE FROM user_blocks WHERE blocker=? OR blocked=?').bind(userId, userId));
+  st.push(db.prepare('DELETE FROM reports WHERE reporter=?').bind(userId));
+  st.push(db.prepare('DELETE FROM house_access WHERE house_user=? OR guest=?').bind(userId, userId));
+  st.push(db.prepare('UPDATE town_plots SET user_id=NULL WHERE user_id=?').bind(userId));
   st.push(db.prepare('DELETE FROM users WHERE id=?').bind(userId));
   await db.batch(st);
 }

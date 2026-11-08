@@ -1,3 +1,5 @@
+import { awardForSession } from './town/coins.js';
+
 export const TABLES = {
   courses: ['name', 'code', 'color', 'archived'],
   assessments: ['course_id', 'kind', 'title', 'date', 'time'],
@@ -70,6 +72,13 @@ export async function patch(db, uid, table, id, body) {
   if (table === 'notes' && !keys.includes('updated')) sets.push("updated=datetime('now')");
   const res = await db.prepare(`UPDATE ${table} SET ${sets.join(',')} WHERE id=? AND user_id=? RETURNING *`).bind(...keys.map((k) => o[k]), id, uid).all();
   if (!res.results.length) throw err(404, 'not_found');
+  if (table === 'sessions' && (o.end_kind === 'done' || o.end_kind === 'stopped')) {
+    try {
+      await awardForSession(db, uid, id);
+    } catch (e) {
+      console.error('award', e && e.message);
+    }
+  }
   return strip(res.results[0]);
 }
 
