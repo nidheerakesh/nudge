@@ -1,6 +1,6 @@
 import { register } from './pixel.js';
 
-const FILES = ['body', 'hair', 'accessories', 'outfits_a', 'outfits_b', 'houses', 'interiors', 'world', 'fx'];
+const FILES = ['body', 'hair', 'accessories', 'outfits_a', 'outfits_b', 'houses', 'interiors', 'world', 'fx', 'shops', 'food', 'hall'];
 
 export default async function loadAll() {
   const got = [];
