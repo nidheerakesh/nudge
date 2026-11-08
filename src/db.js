@@ -21,8 +21,8 @@ const strip = (row) => {
 };
 
 function clean(table, body) {
+  if (!Object.hasOwn(TABLES, table)) throw err(404, 'table');
   const cols = TABLES[table];
-  if (!cols) throw err(404, 'table');
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw err(400, 'body');
   const keys = Object.keys(body);
   for (const k of keys) if (!cols.includes(k)) throw err(400, 'column');
@@ -74,7 +74,7 @@ export async function patch(db, uid, table, id, body) {
 }
 
 export async function remove(db, uid, table, id) {
-  if (!TABLES[table]) throw err(404, 'table');
+  if (!Object.hasOwn(TABLES, table)) throw err(404, 'table');
   const own = await db.prepare(`SELECT 1 AS x FROM ${table} WHERE id=? AND user_id=?`).bind(id, uid).first();
   if (!own) throw err(404, 'not_found');
   const q = (sql, ...a) => db.prepare(sql).bind(...a);
