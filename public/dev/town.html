@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Town scene dev</title>
+<style>
+html,body{margin:0;height:100%;background:#1a2352;overflow:hidden}
+canvas#c{display:block;width:100vw;height:100vh}
+#info{position:fixed;top:6px;left:8px;font:12px monospace;color:#fff;background:#0008;padding:2px 6px;white-space:pre}
+#err{position:fixed;bottom:0;left:0;right:0;font:11px monospace;color:#f88;background:#000a;white-space:pre-wrap}
+canvas#mm{position:fixed;top:6px;right:8px;width:96px;height:96px;image-rendering:pixelated;background:#000}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<canvas id="mm" width="48" height="48"></canvas>
+<div id="info">loading</div>
+<div id="err" data-errors="0"></div>
+<script type="module">
+const errBox = document.getElementById('err')
+let errCount = 0
+function report(m) {
+  errCount++
+  errBox.dataset.errors = String(errCount)
+  errBox.textContent += m + '\n'
+}
+window.addEventListener('error', e => report('error: ' + e.message))
+window.addEventListener('unhandledrejection', e => report('rejection: ' + (e.reason && e.reason.message || e.reason)))
+const ce = console.error
+console.error = (...a) => { report('console.error: ' + a.join(' ')); ce(...a) }
+
+try {
+  const { createEngine } = await import('/town/engine.js')
+  const { default: loadAll } = await import('/town/art/index.js')
+  const { createTownScene } = await import('/town/scene.js')
+  const { createMinimap } = await import('/town/minimap.js')
+  const { districtTemplate } = await import('/town/shared/plots.js')
+  const { ids, has } = await import('/town/art/pixel.js')
+  await loadAll()
+
+  const q = new URLSearchParams(location.search)
+  const hourQ = q.get('hour')
+  const nPlayers = Number(q.get('players') || 20)
+  const nHouses = Number(q.get('houses') || 40)
+
+  const NAMES = ['Mochi', 'Pip', 'Juno', 'Bean', 'Kiko', 'Luna', 'Odie', 'Tilly', 'Nori', 'Fig', 'Wren', 'Sage', 'Moss', 'Poppy', 'Ash', 'Coco', 'Rue', 'Tux', 'Dot', 'Yuzu', 'Ivy', 'Bo', 'Zed', 'Mimi', 'Olly', 'Pea', 'Rio', 'Sol', 'Taro', 'Uma', 'Vi', 'Web', 'Xan', 'Yoyo', 'Zia', 'Abe', 'Bix', 'Cleo', 'Dax', 'Elm']
+  const SIZES = ['hut', 'small', 'medium', 'large', 'manor']
+  const ROOFS = ['red', 'blue', 'green', 'brown']
+  const WALLS = ['plaster', 'wood', 'brick', 'stone']
+  const DOORS = ['wood', 'red', 'blue', 'green']
+  const tpl = districtTemplate()
+  const plots = []
+  for (let i = 0; i < Math.min(nHouses, tpl.plots.length); i++) {
+    plots.push({
+      slot: i,
+      owner: { id: 'o' + i, name: NAMES[i % NAMES.length] },
+      house: { size: SIZES[i % 5], roof: ROOFS[i % 4], wall: WALLS[(i >> 1) % 4], door: DOORS[(i >> 2) % 4] },
+    })
+  }
+  const players = []
+  const acts = ['active', 'idle', 'away']
+  for (let i = 0; i < nPlayers; i++) {
+    players.push({
+      id: 'p' + i, name: NAMES[(i + 7) % NAMES.length],
+      look: { skin: i % 6, hair_color: i % 8, outfit: i },
+      x: i % 2 ? 6.5 + i * 2.2 : 27.5, y: i % 2 ? 21.5 : 4.5 + i * 1.8, dir: 'd',
+      st: i % 3 === 0 ? 'focus' : 'idle', act: acts[i % 3], left: 600, m: 25, fed: i % 4 === 0,
+    })
+  }
+
+  const canvas = document.getElementById('c')
+  const eng = createEngine(canvas)
+  const scene = createTownScene({ engine: eng, district: 0, plots, players, me: { id: 'me', name: 'You', look: { skin: 1, hair_color: 2, outfit: 3 } } })
+  if (q.get('weather')) scene.setWeather(q.get('weather'))
+  if (hourQ != null && hourQ !== '') scene.setHour(Number(hourQ))
+  scene.onDoor = id => console.log('door', id)
+  scene.onPlayer = id => console.log('player', id)
+  scene.onLandmark = k => console.log('landmark', k)
+  scene.emote('p1', 'heart', 1e9)
+  scene.knock('o3', 1e9)
+  eng.setScene(scene)
+  eng.start()
+
+  const mm = createMinimap({ canvas: document.getElementById('mm'), count: 9, current: 0, claimed: { 0: plots.map(p => p.slot) } })
+  const info = document.getElementById('info')
+  const t0 = performance.now()
+  let drawn = 0
+  const tick = () => {
+    const c = scene.player()
+    mm.setPlayer({ district: 0, x: c.x, y: c.y })
+    mm.draw()
+    drawn++
+    requestAnimationFrame(tick)
+  }
+  tick()
+  const samples = []
+  setInterval(() => {
+    samples.push(eng.fps)
+    const avg = samples.reduce((a, b) => a + b, 0) / samples.length
+    info.textContent = `hour ${scene.getHour().toFixed(1)} weather ${scene.weather.kind}\n${eng.fps} fps (avg ${avg.toFixed(1)}), ${nHouses} houses, ${nPlayers} players${eng.reduced ? ', reduced' : ''}`
+    if (q.get('log')) console.log('FPS ' + eng.fps + ' avg ' + avg.toFixed(1))
+    document.body.dataset.fps = String(eng.fps)
+    document.body.dataset.avgfps = avg.toFixed(1)
+  }, 500)
+  window.__scene = scene
+  window.__eng = eng
+  window.__missing = ['tile.7.n', 'duck.swim.r.0', 'duck.swim.l.0', 'ring.4', 'bubble.heart.0', 'fx.fed', 'bell', 'bell.ring', 'signpost', 'smoke.0', 'shadow', 'lamp.day', 'lamp.night', 'bush.0', 'flowers.0', 'tree.cherry.0', 'tree.green.0', 'tree.autumn.0', 'tree.pine.0', 'landmark.boutique', 'landmark.homestore', 'landmark.bakery', 'landmark.library', 'landmark.townhall', 'fountain.0', 'bench.h', 'fence.h', 'fence.v'].filter(i => !has(i))
+  document.body.dataset.missing = window.__missing.join(',')
+} catch (e) {
+  report('boot: ' + (e && e.stack || e))
+}
+</script>
+</body>
+</html>
