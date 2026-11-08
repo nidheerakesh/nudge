@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nudge</title>
+<meta name="theme-color" content="#faf7f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161816" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<div id="app"><main id="view"></main></div><div id="layer"></div>
+<script type="module">
+import { h, toast, sheet, confirmBox, field, chips, empty, fmtMins, icon } from '/js/ui.js';
+const v = document.getElementById('view');
+let pick = 'a', seg = 'x';
+const sec = (t, ...k) => h('section', { class: 'card col' }, h('h2', null, t), ...k);
+function draw() {
+  v.replaceChildren(
+    h('h1', null, 'Nudge kit'),
+    h('div', { class: 'row' },
+      h('button', { class: 'btn', onclick: () => { document.documentElement.dataset.theme = 'light' } }, 'Light'),
+      h('button', { class: 'btn', onclick: () => { document.documentElement.dataset.theme = 'dark' } }, 'Dark'),
+      h('button', { class: 'btn', onclick: () => { delete document.documentElement.dataset.theme } }, 'System')),
+    sec('Type', h('h1', null, 'Heading 1'), h('h2', null, 'Heading 2'), h('h3', null, 'Heading 3'), h('p', null, 'Body text'), h('p', { class: 'small' }, 'Small muted text')),
+    sec('Buttons', h('div', { class: 'row' },
+      h('button', { class: 'btn' }, 'Default'), h('button', { class: 'btn primary' }, 'Primary'),
+      h('button', { class: 'btn ghost' }, 'Ghost'), h('button', { class: 'btn danger' }, 'Danger'),
+      h('button', { class: 'btn icon', 'aria-label': 'Add' }, icon('plus')), h('button', { class: 'btn', disabled: true }, 'Disabled'))),
+    sec('Icons', h('div', { class: 'row' }, ['plus', 'check', 'play', 'pause', 'stop', 'trash', 'edit', 'chevron', 'calendar', 'book', 'clock', 'more', 'sun', 'list', 'sparkle'].map(icon))),
+    sec('Chips and seg', chips([{ v: 'a', label: 'One' }, { v: 'b', label: 'Two' }, { v: 'c', label: 'Three' }], pick, x => { pick = x; draw(); }),
+      h('div', { class: 'seg' }, ['x', 'y', 'z'].map(k => h('button', { class: k === seg ? 'on' : '', onclick: () => { seg = k; draw(); } }, 'Seg ' + k)))),
+    sec('Check, badges, bar', h('div', { class: 'row' }, h('button', { class: 'check', 'aria-label': 'off' }, icon('check')), h('button', { class: 'check on', 'aria-label': 'on' }, icon('check')),
+      h('span', { class: 'badge' }, 'Badge'), h('span', { class: 'badge warn' }, 'Warn'), h('span', { class: 'badge ok' }, 'Ok')),
+      h('div', { class: 'bar' }, h('span', { style: { width: '60%' } }))),
+    h('div', { class: 'list' }, ['First', 'Second', 'Third'].map(t => h('div', { class: 'item' }, h('span', { class: 'grow' }, t), h('span', { class: 'small' }, fmtMins(45))))),
+    sec('Card', h('p', null, 'A card with a stat.'), h('div', { class: 'stat' }, h('b', null, '1h 30m'), h('span', null, 'Focused today'))),
+    sec('Timeline', h('div', { class: 'timeline' },
+      h('div', { class: 'block' }, h('h3', null, 'Task block'), h('span', { class: 'small' }, '09:00, 45m')),
+      h('div', { class: 'block fixed' }, h('h3', null, 'Fixed class'), h('span', { class: 'small' }, '10:00, 1h')),
+      h('div', { class: 'block break' }, h('h3', null, 'Break'), h('span', { class: 'small' }, '11:00, 10m')),
+      h('div', { class: 'block done' }, h('h3', null, 'Done block'), h('span', { class: 'small' }, '11:10, 30m')),
+      h('div', { class: 'block ghost' }, h('h3', null, 'Proposed block'), h('span', { class: 'small' }, '12:00, 30m')))),
+    sec('Grid7', h('div', { class: 'grid7' }, [1, 2, 3, 4, 5, 6, 7].map(n => h('div', null, n)))),
+    sec('Chart', h('div', { class: 'chart' }, [20, 50, 35, 80, 60, 10, 90].map(n => h('span', { style: { height: n + '%' } })))),
+    sec('Inputs', field('Text', h('input', { placeholder: 'Type here' })), field('Select', h('select', null, h('option', null, 'A'), h('option', null, 'B'))), field('Area', h('textarea'))),
+    sec('Overlays', h('div', { class: 'row' },
+      h('button', { class: 'btn', onclick: () => sheet('Sheet', [field('Name', h('input')), h('button', { class: 'btn primary' }, 'Save')]) }, 'Sheet'),
+      h('button', { class: 'btn', onclick: () => toast('Task deleted', { action: 'Undo', onAction: () => toast('Restored') }) }, 'Toast'),
+      h('button', { class: 'btn', onclick: async () => toast((await confirmBox('Delete it?', { ok: 'Delete', danger: true })) ? 'Yes' : 'No') }, 'Confirm'))),
+    empty('Nothing here yet', h('button', { class: 'btn primary' }, 'Add one')));
+}
+draw();
+</script>
+</body>
+</html>
