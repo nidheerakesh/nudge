@@ -2,6 +2,7 @@ let rate = null;
 let tick = 0;
 let mins = 0;
 let pick = '';
+const vc = (f) => import('../../town/verifyclient.js').then(f).catch(() => {});
 
 const DN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -31,8 +32,9 @@ export default function view(root, ctx) {
   const wrap = h('div', { class: 'wrap col' });
   root.append(wrap);
   const t = store.timer();
-  if (t) wrap.append(running(t));
+  if (t) { vc(m => m.start(t.session_id, () => !!(store.timer() || {}).paused_at)); wrap.append(running(t)); }
   else {
+    vc(m => m.stop());
     document.title = 'Nudge';
     if (rate) wrap.append(rating());
     wrap.append(idle());
