@@ -130,8 +130,10 @@ test('answer after a miss verifies only the new interval', async () => {
 
 test('tail: 8 minutes counts, 9 does not', () => {
   const r = { started: 0, last_ping: 0, active_secs: 480, verified_secs: 0, last_ok: 0, misses: 0, paused: 0, ended: 0, lost: 0 };
-  assert.equal(finish(r, 0, null).verified_secs, 480);
-  assert.equal(finish({ ...r, active_secs: 540 }, 0, null).verified_secs, 0);
+  assert.equal(finish(r, 0, null).verified_secs, 0);
+  const ok = { ...r, verified_secs: 60, active_secs: 540 };
+  assert.equal(finish(ok, 0, null).verified_secs, 540);
+  assert.equal(finish({ ...ok, active_secs: 600 }, 0, null).verified_secs, 60);
   const after = { ...r, active_secs: 1000, verified_secs: 500 };
   assert.equal(finish({ ...after, active_secs: 980 }, 0, null).verified_secs, 980);
   assert.equal(finish({ ...after, active_secs: 1100 }, 0, null).verified_secs, 500);

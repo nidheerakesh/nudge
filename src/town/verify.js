@@ -56,7 +56,7 @@ export function finish(row, now, check, rand = Math.random) {
   let r = row;
   const m = applyMiss(r, check, now, rand);
   if (m) r = m.row;
-  if (!r.ended && r.misses === 0) {
+  if (!r.ended && r.misses === 0 && r.verified_secs > 0) {
     const tail = Math.max(0, r.active_secs - bound(r));
     if (tail <= TAIL) r = { ...r, verified_secs: r.verified_secs + tail };
   }
