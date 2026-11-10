@@ -215,10 +215,17 @@ function mount(c0) {
     return { id: uid(), name: a.name || '', look: a, st: 'idle', act: 'active', ...(extra || {}) };
   }
 
+  // Scene calls draw(ctx, look, anim, t, x, y, o); drawAvatar takes (ctx, look, state, x, y).
+  function sceneAvatar(ctx, look, anim, t, x, y, o) {
+    o = o || {};
+    const moving = !!o.moving;
+    drawAvatar(ctx, look, { anim: moving ? 'walk' : 'idle', dir: moving ? o.dir : 'd', frame: moving ? Math.floor(t * 8) : 0 }, x, y);
+  }
+
   function buildTown(spawn) {
     if (town) town.destroy();
     town = createTownScene({
-      engine, district, plots, players: [...seen.values()], me: sceneMe(spawn), drawAvatar,
+      engine, district, plots, players: [...seen.values()], me: sceneMe(spawn), drawAvatar: sceneAvatar,
     });
     town.onDoor = onDoor;
     town.onLandmark = onLandmark;
