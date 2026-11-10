@@ -49,7 +49,7 @@ export function createRoom(cfg) {
   const grid = Array.from({ length: H }, (_, y) => Array.from({ length: W }, (_, x) => (y < minY || blocked.has(x + ':' + y) ? 1 : 0)))
   const still = () => !!(engine && engine.reduced)
   const mine = { look: (cfg.me && cfg.me.look) || {}, name: (cfg.me && cfg.me.name) || '', a: 'idle', seat: null, eat: null, ring: null, vp: null, fed: false }
-  const scene = { size: { w: W, h: H }, onExit: null, onTile: null, onSeat: null, onStand: null, onTap: null, onPos: null, others, mine }
+  const scene = { size: { w: W, h: H }, fit: true, bg: cfg.roomBg || '#6A3F8E', onExit: null, onTile: null, onSeat: null, onStand: null, onTap: null, onPos: null, others, mine }
   let clock = 0
   let sent = 0
   let lastTile = ''

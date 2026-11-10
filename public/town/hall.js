@@ -43,7 +43,7 @@ export function createHallScene({ engine, me, onExit, onBoard }) {
     props.push({ id: 'hall.desk', x: c.x * TILE + 8, y: (c.y + 2) * TILE, sort: (c.y + 2) * TILE })
   }
   const room = createRoom({
-    engine, W, H, bg: 'hall.room', blocked, seats, minY: 10, door: [11, 12], start: [11.5, 13.5], rings: true, me, props,
+    engine, W, H, bg: 'hall.room', roomBg: '#163D3F', blocked, seats, minY: 10, door: [11, 12], start: [11.5, 13.5], rings: true, me, props,
   })
   room.onExit = onExit
   room.onTap = (x, y) => {
