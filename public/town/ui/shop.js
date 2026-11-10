@@ -1,3 +1,4 @@
+import { kicon } from '/town/ui/icons.js';
 import { byId, ids } from '/town/shared/catalog.js';
 import { SIZES, furnInfo } from '/town/interior.js';
 import { avatarPanel, buy, card, grid, oops, pill, bal, owns } from '/town/ui/wardrobe.js';
@@ -65,14 +66,14 @@ function bakery(ctx) {
       const lock = total > bal(ctx);
       const have = (ctx.me.pantry && ctx.me.pantry[it.id]) || 0;
       const step = (d) => { qty[it.id] = Math.max(1, Math.min(10, q + d)); redraw(); };
-      const sb = (label, d, dis) => h('button', { class: 'btn', type: 'button', 'aria-label': label + ' ' + it.name, disabled: dis, style: { minWidth: '44px', minHeight: '44px' }, onclick: () => step(d) }, d < 0 ? '-' : '+');
-      return h('div', { class: 'card col', style: { marginBottom: '0', alignItems: 'center', textAlign: 'center', opacity: lock ? '.6' : '1' } },
+      const sb = (label, d, dis) => h('button', { class: 'k-btn', type: 'button', 'aria-label': label + ' ' + it.name, disabled: dis, style: { minWidth: '44px', minHeight: '44px' }, onclick: () => step(d) }, d < 0 ? '-' : '+');
+      return h('div', { class: 'k-panel col', style: { marginBottom: '0', alignItems: 'center', textAlign: 'center', opacity: lock ? '.6' : '1' } },
         h('strong', null, it.name),
-        h('span', { class: 'badge warn' }, it.price + ' coins each'),
+        h('span', { class: 'k-pill' }, kicon('coin', 14), it.price + ' coins each'),
         have ? h('span', { class: 'small' }, 'In pantry: ' + have) : null,
         h('div', { class: 'row', style: { justifyContent: 'center', alignItems: 'center' } }, sb('Less', -1, q <= 1), h('strong', { 'aria-live': 'polite', 'aria-label': 'Quantity ' + q }, String(q)), sb('More', 1, q >= 10)),
         lock ? h('span', { class: 'small' }, 'Need ' + (total - bal(ctx)) + ' more coins') : null,
-        h('button', { class: 'btn primary', type: 'button', disabled: lock, 'aria-label': 'Buy ' + q + ' ' + it.name + ' for ' + total + ' coins', onclick: async () => {
+        h('button', { class: 'k-btn pink', type: 'button', disabled: lock, 'aria-label': 'Buy ' + q + ' ' + it.name + ' for ' + total + ' coins', onclick: async () => {
           if (await buy(ctx, it.id, q)) ctx.toast('Bought ' + q + ' ' + it.name + '.');
           redraw();
         } }, 'Buy ' + q + ' for ' + total));
@@ -92,6 +93,6 @@ export function openShop(ctx, kind) {
       el = p.el;
     } else if (kind === 'bakery') el = bakery(ctx);
     else el = homestore(ctx);
-    ctx.ui.sheet(TITLES[kind] || 'Shop', el, { onClose: () => { if (stop) stop(); res(); } });
+    ctx.ui.sheet(TITLES[kind] || 'Shop', h('div', { class: 'k-panel col', style: { padding: '12px' } }, el), { onClose: () => { if (stop) stop(); res(); } });
   });
 }

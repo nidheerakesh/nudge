@@ -1,3 +1,4 @@
+import { kicon } from '/town/ui/icons.js';
 import { byId, ids } from '/town/shared/catalog.js';
 import { PRESETS, missingParts } from '/town/shared/presets.js';
 import { drawAvatar, getAvatarFrame, playAnim } from '/town/avatar.js';
@@ -21,7 +22,7 @@ const tierName = (it) => (it.price === 0 ? 'free' : it.tier);
 
 export function pill(ctx) {
   const { h } = ctx.ui;
-  const el = h('span', { class: 'badge ok', role: 'status', 'aria-label': 'Coin balance', style: { fontSize: '14px', padding: '4px 12px' } });
+  const el = h('span', { class: 'k-pill', role: 'status', 'aria-label': 'Coin balance', style: { fontSize: '14px', padding: '4px 12px' } });
   el.update = () => { el.textContent = bal(ctx) + ' coins'; };
   el.update();
   return el;
@@ -101,7 +102,7 @@ export function makePreview(ctx, look, o = {}) {
     st.frame = 0;
     if (reduced()) draw();
   };
-  const btn = (label, fn) => h('button', { class: 'chip', type: 'button', 'aria-label': label, onclick: fn }, label);
+  const btn = (label, fn) => h('button', { class: 'k-chip', type: 'button', 'aria-label': label, onclick: fn }, label);
   const bar = h('div', { class: 'row' },
     btn('Turn', () => { st.dir = dirs[(dirs.indexOf(st.dir) + 1) % 4]; if (st.anim === 'walk') st.anim = 'walk'; else if (st.anim !== 'idle') go('idle'); if (reduced()) draw(); }),
     btn('Walk', () => go('walk')),
@@ -132,18 +133,18 @@ export function card(ctx, it, opts = {}) {
   const need = it.price - bal(ctx);
   const lock = !own && need > 0;
   const act = [];
-  if (opts.preview) act.push(h('button', { class: 'btn', type: 'button', 'aria-label': 'Preview ' + it.name, onclick: opts.preview }, 'Preview'));
+  if (opts.preview) act.push(h('button', { class: 'k-btn', type: 'button', 'aria-label': 'Preview ' + it.name, onclick: opts.preview }, 'Preview'));
   if (own && opts.use) {
-    act.push(h('button', { class: 'btn primary', type: 'button', 'aria-label': opts.use.label + ' ' + it.name, disabled: !!opts.active, onclick: opts.use.fn }, opts.active ? 'Wearing' : opts.use.label));
+    act.push(h('button', { class: 'k-btn pink', type: 'button', 'aria-label': opts.use.label + ' ' + it.name, disabled: !!opts.active, onclick: opts.use.fn }, opts.active ? 'Wearing' : opts.use.label));
   } else if (!own) {
-    act.push(h('button', { class: 'btn primary', type: 'button', 'aria-label': 'Buy ' + it.name + ' for ' + it.price + ' coins', disabled: lock, onclick: opts.buy }, 'Buy for ' + it.price));
+    act.push(h('button', { class: 'k-btn pink', type: 'button', 'aria-label': 'Buy ' + it.name + ' for ' + it.price + ' coins', disabled: lock, onclick: opts.buy }, 'Buy for ' + it.price));
   }
-  return h('div', { class: 'card col', style: { opacity: lock ? '.6' : '1', marginBottom: '0', alignItems: 'center', textAlign: 'center' } },
+  return h('div', { class: 'k-panel col', style: { opacity: lock ? '.6' : '1', marginBottom: '0', alignItems: 'center', textAlign: 'center' } },
     opts.thumb || null,
     h('strong', null, it.name),
     h('div', { class: 'row', style: { justifyContent: 'center' } },
       h('span', { class: 'badge' }, tierName(it)),
-      own ? h('span', { class: 'badge ok' }, it.price === 0 ? 'Free' : 'Owned') : h('span', { class: 'badge warn' }, it.price + ' coins')),
+      own ? h('span', { class: 'badge ok' }, it.price === 0 ? 'Free' : 'Owned') : h('span', { class: 'k-pill' }, kicon('coin', 14), it.price + ' coins')),
     lock ? h('span', { class: 'small' }, 'Need ' + need + ' more coins') : null,
     opts.note || null,
     h('div', { class: 'row', style: { justifyContent: 'center' } }, act));
@@ -196,14 +197,14 @@ export function avatarPanel(ctx, o = {}) {
       const m = missingParts(p, own);
       const lock = m.need.length > 0;
       const poor = lock && m.cost > bal(ctx);
-      const btns = [h('button', { class: 'btn', type: 'button', 'aria-label': 'Preview ' + p.name, onclick: () => setView(look) }, 'Preview')];
-      if (!lock) btns.push(h('button', { class: 'btn primary', type: 'button', 'aria-label': 'Wear ' + p.name, onclick: () => wear(look) }, 'Wear'));
+      const btns = [h('button', { class: 'k-btn', type: 'button', 'aria-label': 'Preview ' + p.name, onclick: () => setView(look) }, 'Preview')];
+      if (!lock) btns.push(h('button', { class: 'k-btn pink', type: 'button', 'aria-label': 'Wear ' + p.name, onclick: () => wear(look) }, 'Wear'));
       else if (!poor) {
-        btns.push(h('button', { class: 'btn primary', type: 'button', 'aria-label': 'Buy ' + m.need.length + ' parts for ' + m.cost + ' coins', onclick: () => run(async () => {
+        btns.push(h('button', { class: 'k-btn pink', type: 'button', 'aria-label': 'Buy ' + m.need.length + ' parts for ' + m.cost + ' coins', onclick: () => run(async () => {
           for (const id of m.need) if (!(await buy(ctx, id))) return;
         }) }, 'Buy ' + m.need.length + (m.need.length === 1 ? ' part' : ' parts') + ' for ' + m.cost + ' coins'));
-      } else btns.push(h('button', { class: 'btn', type: 'button', disabled: true }, 'Locked'));
-      return h('div', { class: 'card col', style: { opacity: poor ? '.6' : '1', marginBottom: '0', alignItems: 'center', textAlign: 'center' } },
+      } else btns.push(h('button', { class: 'k-btn', type: 'button', disabled: true }, 'Locked'));
+      return h('div', { class: 'k-panel col', style: { opacity: poor ? '.6' : '1', marginBottom: '0', alignItems: 'center', textAlign: 'center' } },
         mini(look), h('strong', null, p.name),
         lock ? h('span', { class: 'badge warn' }, 'Locked, ' + m.cost + ' coins') : h('span', { class: 'badge ok' }, 'Ready'),
         poor ? h('span', { class: 'small' }, 'Need ' + (m.cost - bal(ctx)) + ' more coins') : null,
@@ -218,7 +219,7 @@ export function avatarPanel(ctx, o = {}) {
       h('strong', null, 'Skin'),
       h('div', { class: 'row' }, SKINS.map((s, i) => sw(s[0], worn.skin === i + 1, 'Skin ' + (i + 1), () => wear({ skin: i + 1 })))),
       h('strong', null, 'Hair style'),
-      h('div', { class: 'row' }, [1, 2, 3, 4, 5, 6, 7, 8].map((n) => h('button', { class: 'chip' + (worn.hair === n ? ' on' : ''), type: 'button', 'aria-pressed': String(worn.hair === n), 'aria-label': 'Hair style ' + n, style: { minHeight: '44px', minWidth: '44px' }, onclick: () => wear({ hair: n }) }, String(n)))),
+      h('div', { class: 'row' }, [1, 2, 3, 4, 5, 6, 7, 8].map((n) => h('button', { class: 'k-chip' + (worn.hair === n ? ' on' : ''), type: 'button', 'aria-pressed': String(worn.hair === n), 'aria-label': 'Hair style ' + n, style: { minHeight: '44px', minWidth: '44px' }, onclick: () => wear({ hair: n }) }, String(n)))),
       h('strong', null, 'Hair colour'),
       h('div', { class: 'row' }, HAIRS.map((c, i) => sw(c[1], worn.hair_color === i + 1, 'Hair colour ' + HAIR_NAMES[i], () => wear({ hair_color: i + 1 })))),
       h('span', { class: 'small' }, 'Skin and hair are free.'));
@@ -239,9 +240,9 @@ export function avatarPanel(ctx, o = {}) {
       });
     });
     if (kind === 'acc') {
-      cards.unshift(h('div', { class: 'card col', style: { marginBottom: '0', alignItems: 'center', textAlign: 'center' } },
+      cards.unshift(h('div', { class: 'k-panel col', style: { marginBottom: '0', alignItems: 'center', textAlign: 'center' } },
         h('strong', null, 'None'),
-        h('button', { class: 'btn', type: 'button', 'aria-label': 'Wear no accessory', disabled: !worn.accessory, onclick: () => wear({ accessory: null }) }, 'Take off')));
+        h('button', { class: 'k-btn', type: 'button', 'aria-label': 'Wear no accessory', disabled: !worn.accessory, onclick: () => wear({ accessory: null }) }, 'Take off')));
     }
     return grid(ctx, cards);
   }
@@ -258,6 +259,6 @@ export function avatarPanel(ctx, o = {}) {
 export function openWardrobe(ctx) {
   return new Promise((res) => {
     const p = avatarPanel(ctx, {});
-    ctx.ui.sheet('Wardrobe', p.el, { onClose: () => { p.stop(); res(); } });
+    ctx.ui.sheet('Wardrobe', h('div', { class: 'k-panel col', style: { padding: '12px' } }, p.el), { onClose: () => { p.stop(); res(); } });
   });
 }
