@@ -8,6 +8,15 @@ const KEYS = {
   ArrowDown: 'd', s: 'd', S: 'd',
 }
 
+export function baseScale(cw, ch) {
+  return Math.min(6, Math.max(2, Math.floor(Math.min(cw, ch) / 200)))
+}
+
+export function fitScale(viewW, viewH, sceneWpx, sceneHpx, dpr = 1) {
+  const s = Math.floor(viewH / Math.max(1, sceneHpx))
+  return Math.min(8, Math.max(2, s))
+}
+
 export function sortByY(list) {
   return list.sort((a, b) => a.y - b.y)
 }
@@ -80,7 +89,8 @@ export function createEngine(canvas, opts = {}) {
     const cw = Math.max(1, r.width), ch = Math.max(1, r.height)
     const dpr = window.devicePixelRatio || 1
     const bw = Math.max(1, Math.round(cw * dpr)), bh = Math.max(1, Math.round(ch * dpr))
-    scale = opts.scale || Math.min(6, Math.max(2, Math.floor(Math.min(cw, ch) / 200)))
+    if (scene && scene.fit && scene.size) scale = fitScale(cw, ch, scene.size.w * tile, scene.size.h * tile, dpr)
+    else scale = opts.scale || baseScale(cw, ch)
     dev = Math.max(1, Math.round(scale * dpr))
     if (canvas.width !== bw) canvas.width = bw
     if (canvas.height !== bh) canvas.height = bh
@@ -137,6 +147,7 @@ export function createEngine(canvas, opts = {}) {
     while (acc >= STEP) { step(); acc -= STEP }
     octx.imageSmoothingEnabled = false
     octx.clearRect(0, 0, off.width, off.height)
+    if (scene && scene.bg) { octx.fillStyle = scene.bg; octx.fillRect(0, 0, off.width, off.height) }
     if (scene) scene.draw(octx, cam, t)
     ctx.imageSmoothingEnabled = false
     ctx.drawImage(off, 0, 0, off.width * dev, off.height * dev)

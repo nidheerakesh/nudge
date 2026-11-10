@@ -119,7 +119,7 @@ export function createInteriorScene({ engine, house, items, members, me, onExit 
   let others = new Map()
 
   const mine = { look: (me && me.look) || {}, name: (me && me.name) || '', a: 'idle' }
-  const scene = { size: { w: W, h: H }, night: isNight(), onCell: null, onSit: null, onExit: onExit || null }
+  const scene = { size: { w: W, h: H }, fit: true, bg: '#4A2F2A', night: isNight(), onCell: null, onSit: null, onExit: onExit || null }
   const still = () => !!(engine && engine.reduced)
 
   const info = it => furnInfo(it.item_id)
