@@ -120,10 +120,12 @@ function build() {
   }
   for (const deg of [45, 135, 225, 315]) {
     let done = false
-    for (const rr of [1.1, 1.2, 1.3, 1.4, 1.5]) {
-      const t = ring(deg, rr)
-      for (const x of [t.x, t.x - 1]) {
-        if (!done && free(x, t.y) && free(x + 1, t.y)) { put('bench', x, t.y); occ.add((x + 1) + ',' + t.y); done = true }
+    for (const rr of [1.1, 1.2, 1.3, 1.4, 1.5, 1.7, 1.9]) {
+      for (const da of [0, 12, -12, 24, -24, 36, -36]) {
+        const t = ring(deg + da, rr)
+        for (const x of [t.x, t.x - 1]) {
+          if (!done && free(x, t.y) && free(x + 1, t.y)) { put('bench', x, t.y); occ.add((x + 1) + ',' + t.y); done = true }
+        }
       }
       if (done) break
     }
