@@ -79,7 +79,7 @@ export function createMinimap({ canvas, count = 1, current = 0, claimed = null, 
       ctx.fillRect(r.x, r.y, r.s, r.s)
       const sx = r.s / W, sy = r.s / H
       ctx.fillStyle = C.road
-      ctx.fillRect(r.x + Math.floor(27 * sx), r.y, Math.max(1, Math.round(2 * sx)), r.s)
+      ctx.fillRect(r.x + Math.floor(28 * sx), r.y, Math.max(1, Math.round(2 * sx)), r.s)
       ctx.fillRect(r.x, r.y + Math.floor(21 * sy), r.s, Math.max(1, Math.round(2 * sy)))
       const taken = new Set(claims[i] || [])
       const d = r.s >= 24 ? 2 : 1
