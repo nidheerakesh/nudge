@@ -1,6 +1,6 @@
 import { TILE, moveController, sortByY } from './engine.js'
 import { getSprite, getAnim, has } from './art/pixel.js'
-import { composeHouse, doorTile } from './art/houses.js'
+import { composeHouse, doorTile, HOUSE_ROOF_ROWS } from './art/houses.js'
 import fx from './art/fx.js'
 import { SKIN_BASE } from './art/palette.js'
 import { districtTemplate, WALK, W, H } from './shared/plots.js'
@@ -14,7 +14,38 @@ const LABELS = { boutique: 'BOUTIQUE', homestore: 'HOME STORE', bakery: 'BAKERY'
 const ACT_COLOR = { active: '#5AC47A', idle: '#F2C14E', away: '#9AA3B2' }
 const HAIRS = ['#7A4A2B', '#2A1F2D', '#A8442A', '#E8892B', '#F0CC66', '#F28BB0', '#A98BE0', '#5B8DE0']
 const TREES = ['tree.cherry', 'tree.green', 'tree.autumn', 'tree.pine']
-const SPAWN = { x: 27.5, y: 19.5 }
+const OFFMAP = '#1F5A4A'
+
+// bottom-centre anchor: sprite bottom = footprint bottom, centred on the footprint
+export function staticRect(foot, spriteW, spriteH) {
+  const key = (foot.y + foot.h) * TILE
+  return { x: (foot.x + foot.w / 2) * TILE - spriteW / 2, y: key - spriteH, key }
+}
+
+export function spawnTile(tpl) {
+  const f = tpl.fountain
+  return { x: f.x + Math.floor(f.w / 2), y: f.y + f.h }
+}
+
+// solid tiles from the static map: landmarks/fountain (minus doors), trunks, lamps, benches, bushes, fences
+export function baseSolid(tpl) {
+  const solid = new Uint8Array(W * H)
+  const block = (x, y) => { if (x >= 0 && y >= 0 && x < W && y < H) solid[y * W + x] = 1 }
+  for (const d of tpl.decor) {
+    if (d.kind === 'flower' || d.kind === 'flowerbed') continue
+    block(d.x, d.y)
+    if (d.kind === 'bench') block(d.x + 1, d.y)
+  }
+  for (const l of tpl.landmarks) {
+    for (let y = l.y; y < l.y + l.h; y++) for (let x = l.x; x < l.x + l.w; x++) {
+      if (x === l.door.x && y === l.door.y) continue
+      block(x, y)
+    }
+  }
+  const f = tpl.fountain
+  for (let y = f.y; y < f.y + f.h; y++) for (let x = f.x; x < f.x + f.w; x++) block(x, y)
+  return solid
+}
 
 // 3x5 pixel font, 5 rows of 3 bits per glyph
 const FONT = {
@@ -195,6 +226,7 @@ export function createTownScene({ engine, district = 0, plots = [], players = []
   const tpl = districtTemplate()
   const ground = tpl.ground
   const solid = new Uint8Array(W * H)
+  const SPAWN = (() => { const t = spawnTile(tpl); return { x: t.x + 0.5, y: t.y + 0.5 } })()
   const doorAt = new Map()
   const footAt = new Map()
   const draw = drawAvatar || placeholderAvatar
@@ -202,6 +234,7 @@ export function createTownScene({ engine, district = 0, plots = [], players = []
   const weather = createWeather({ engine })
 
   let statics = []
+  let flats = []
   let lamps = []
   let houses = []
   let hourSet = null
@@ -257,10 +290,11 @@ export function createTownScene({ engine, district = 0, plots = [], players = []
     statics.push(o)
   }
 
-  function sprObj(id, px, py, extra = {}) {
+  function sprObj(id, foot, extra = {}) {
     const s = spr(id)
     if (!s) return null
-    return { y: py, x0: px - s.width / 2, x1: px + s.width / 2, y0: py - s.height, y1: py, id, px, py, ...extra }
+    const r = staticRect(foot, s.width, s.height)
+    return { y: r.key, x0: r.x, x1: r.x + s.width, y0: r.y, y1: r.key, id, px: r.x + s.width / 2, py: r.key, ...extra }
   }
 
   function plaque(text, px, py, fg = '#2A1F2D', bg = '#F6DDB8') {
@@ -270,57 +304,56 @@ export function createTownScene({ engine, district = 0, plots = [], players = []
 
   function buildStatics() {
     statics = []
+    flats = []
     lamps = []
     houses = []
-    solid.fill(0)
+    solid.set(baseSolid(tpl))
     doorAt.clear()
     footAt.clear()
     const block = (x, y) => { if (inb(x, y)) solid[key(x, y)] = 1 }
 
     for (const d of tpl.decor) {
-      const px = (d.x + 0.5) * T, py = (d.y + 1) * T
       const h = hash(d.x, d.y)
       let id
-      let hard = true
-      let flipTiles = false
-      if (d.kind === 'tree') id = `${TREES[h % TREES.length]}.${(h >> 3) & 1}`
-      else if (d.kind === 'bush') id = `bush.${h % 3}`
-      else if (d.kind === 'flower') { id = `flowers.${h % 3}`; hard = false }
+      let flat = false
+      let foot = { x: d.x, y: d.y, w: 1, h: 1 }
+      let extra = {}
+      if (d.kind === 'tree') {
+        const k = d.treeKind || TREES[h % TREES.length].slice(5)
+        id = `tree.${k}.${(h >> 3) & 1}`
+        extra = { anim: `tree.${k}`, animOff: h & 1 }
+      } else if (d.kind === 'bush') id = `bush.${h % 3}`
+      else if (d.kind === 'flower') { id = `flowers.${h % 3}`; flat = true }
+      else if (d.kind === 'flowerbed') { id = 'flowerbed'; flat = true; foot = { x: d.x, y: d.y, w: 2, h: 1 } }
       else if (d.kind === 'fence') id = d.y === 0 || d.y === H - 1 ? 'fence.h' : 'fence.v'
-      else if (d.kind === 'bench') id = 'bench.h'
+      else if (d.kind === 'bench') { id = 'bench.h'; foot = { x: d.x, y: d.y, w: 2, h: 1 } }
       else if (d.kind === 'lamp') id = 'lamp.day'
       else continue
-      const o = sprObj(id, px, py, { flipTiles })
+      const o = sprObj(id, foot, extra)
       if (!o) continue
       if (d.kind === 'lamp') {
         o.lamp = true
         lamps.push(o)
       }
-      if (hard) block(d.x, d.y)
-      addStatic(o)
+      if (flat) flats.push(o)
+      else addStatic(o)
     }
 
     for (const l of tpl.landmarks) {
-      const px = (l.x + l.w / 2) * T, py = (l.y + l.h) * T
-      const o = sprObj(`landmark.${l.kind}`, px, py, { night: `landmark.${l.kind}.night`, kind: l.kind })
-      for (let y = l.y; y < l.y + l.h; y++) for (let x = l.x; x < l.x + l.w; x++) {
-        if (x === l.door.x && y === l.door.y) continue
-        block(x, y)
-      }
+      const o = sprObj(`landmark.${l.kind}`, l, { night: `landmark.${l.kind}.night`, kind: l.kind })
       const target = { type: 'landmark', kind: l.kind, door: l.door }
       doorAt.set(key(l.door.x, l.door.y), target)
       for (let y = l.y; y < l.y + l.h; y++) for (let x = l.x; x < l.x + l.w; x++) footAt.set(key(x, y), target)
       if (o) {
-        o.label = plaque(LABELS[l.kind] || l.kind, px, o.y0 + 13)
+        o.label = plaque(LABELS[l.kind] || l.kind, o.px, o.y0 + 13)
         addStatic(o)
       }
     }
 
-    const f = tpl.fountain
     {
-      const o = sprObj('fountain.0', (f.x + 1) * T, (f.y + 2) * T, { anim: 'fountain' })
+      const f = tpl.fountain
+      const o = sprObj('fountain.0', f, { anim: 'fountain' })
       if (o) addStatic(o)
-      for (let y = f.y; y < f.y + f.h; y++) for (let x = f.x; x < f.x + f.w; x++) block(x, y)
     }
 
     const bySlot = new Map()
@@ -329,7 +362,7 @@ export function createTownScene({ engine, district = 0, plots = [], players = []
       const rec = bySlot.get(pt.slot)
       if (!rec) {
         const sx = pt.x + 3, sy = pt.y + 2
-        const o = sprObj('signpost', (sx + 0.5) * T, (sy + 1) * T)
+        const o = sprObj('signpost', { x: sx, y: sy, w: 1, h: 1 })
         if (o) {
           o.label = plaque('FOR SALE', o.px, o.y0 - 2 + 0, '#FFFFFF', '#C0504D')
           addStatic(o)
@@ -346,21 +379,23 @@ export function createTownScene({ engine, district = 0, plots = [], players = []
         houseCache.set(lk, hc)
       }
       const cols = hc.day.width / T, rows = hc.day.height / T
+      const sizeH = rows - HOUSE_ROOF_ROWS
       const x0 = pt.door.x - dt.x
-      const top = pt.face === 's' ? pt.y + 4 - (rows - 1) : pt.y + 1
-      const doorTileXY = { x: x0 + dt.x, y: top + (rows - 1) }
-      for (let y = top; y < top + rows; y++) for (let x = x0; x < x0 + cols; x++) {
+      const bottom = pt.y + 4
+      const top = bottom + 1 - rows
+      const doorTileXY = { x: x0 + dt.x, y: bottom }
+      for (let y = bottom + 1 - sizeH; y <= bottom; y++) for (let x = x0; x < x0 + cols; x++) {
         if (x === doorTileXY.x && y === doorTileXY.y) continue
         block(x, y)
       }
       const target = { type: 'house', owner: rec.owner.id, door: doorTileXY }
       doorAt.set(key(doorTileXY.x, doorTileXY.y), target)
       doorAt.set(key(pt.door.x, pt.door.y), { type: 'house', owner: rec.owner.id, door: pt.door })
-      for (let y = top; y < top + rows; y++) for (let x = x0; x < x0 + cols; x++) footAt.set(key(x, y), target)
+      for (let y = bottom + 1 - sizeH; y <= bottom; y++) for (let x = x0; x < x0 + cols; x++) footAt.set(key(x, y), target)
       const o = {
-        y: (top + rows) * T, x0: x0 * T, x1: (x0 + cols) * T, y0: top * T - 12, y1: (top + rows) * T,
+        y: (bottom + 1) * T, x0: x0 * T, x1: (x0 + cols) * T, y0: top * T - 12, y1: (bottom + 1) * T,
         house: hc, hx: x0 * T, hy: top * T, cols, owner: rec.owner, door: doorTileXY, slot: pt.slot,
-        chimney: cols >= 2 ? { x: x0 * T + cols * T - 16, y: top * T + 4 } : null,
+        chimney: cols >= 2 ? { x: x0 * T + cols * T - 22, y: top * T + 6 } : null,
         label: plaque(rec.owner.name || '', (x0 + cols / 2) * T, top * T - 2),
       }
       houses.push(o)
@@ -528,7 +563,7 @@ export function createTownScene({ engine, district = 0, plots = [], players = []
 
   // ----- ambient life -----
   const flowers = tpl.decor.filter(d => d.kind === 'flower').slice(0, 5)
-  const POND = { x: 14 * T, w: 2 * T, y0: 13 * T, y1: 27 * T }
+  const POND = { x: 2 * T, w: 3 * T, y0: 13 * T, y1: 28 * T }
 
   function anim(id, t, off = 0) {
     const a = getAnim(id)
@@ -542,8 +577,8 @@ export function createTownScene({ engine, district = 0, plots = [], players = []
       const ph = i * 3.1
       const sx = Math.sin(t * 0.35 + ph), sy = Math.sin(t * 0.17 + ph * 2)
       const px = POND.x + POND.w / 2 + sx * 8
-      let py = (i === 0 ? 16.5 + sy * 2.2 : 24.5 + sy * 1.8) * T
-      if (py > 20 * T && py < 24 * T) py = 19.5 * T
+      let py = (i === 0 ? 16.5 + sy * 2.2 : 25.5 + sy * 1.5) * T
+      if (py > 19.5 * T && py < 23.5 * T) py = 19.5 * T
       const right = Math.cos(t * 0.35 + ph) > 0
       const id = `duck.swim.${right ? 'r' : 'l'}.${Math.floor(t * 2 + i) % 2}`
       const s = spr(id)
@@ -551,7 +586,7 @@ export function createTownScene({ engine, district = 0, plots = [], players = []
     }
     const P = 24
     const c = t % P
-    const A = 34 * T, B = 31 * T, cy = 26.5 * T
+    const A = 34 * T, B = 31 * T, cy = 25.5 * T
     let cx = A, id = 'cat.sit', flip = false
     if (c >= 8 && c < 12) { cx = A + (B - A) * ((c - 8) / 4); id = anim('cat.walk.l', t) ? null : 'cat.sit' }
     else if (c >= 12 && c < 20) { cx = B; id = 'cat.sleep.' + (Math.floor(t * 1) % 2) }
@@ -615,7 +650,7 @@ export function createTownScene({ engine, district = 0, plots = [], players = []
     if (o.lamp) id = S.lit > 0.5 ? 'lamp.night' : 'lamp.day'
     if (o.anim) {
       const a = getAnim(o.anim)
-      if (a) id = a.frames[S.red ? 0 : Math.floor(S.t * a.fps) % a.frames.length]
+      if (a) id = a.frames[S.red ? 0 : (Math.floor(S.t * a.fps) + (o.animOff || 0)) % a.frames.length]
     }
     const s = spr(id)
     if (!s) return
@@ -670,10 +705,7 @@ export function createTownScene({ engine, district = 0, plots = [], players = []
     const ox = -cam.x, oy = -cam.y
     ctx.imageSmoothingEnabled = false
 
-    const gr = ctx.createLinearGradient(0, 0, 0, cam.h)
-    gr.addColorStop(0, sky.top)
-    gr.addColorStop(1, sky.bottom)
-    ctx.fillStyle = gr
+    ctx.fillStyle = OFFMAP
     ctx.fillRect(0, 0, cam.w, cam.h)
 
     ctx.drawImage(groundCv, ox, oy)
@@ -688,6 +720,18 @@ export function createTownScene({ engine, district = 0, plots = [], players = []
           }
         }
       }
+    }
+
+    for (const l of tpl.lilies) {
+      const x = l.x * T + ox, y = l.y * T + oy
+      if (x < -T || y < -T || x > cam.w || y > cam.h) continue
+      const s = spr(`lilypad.${(l.x + l.y + (S.red ? 0 : Math.floor(t * 0.6))) & 1}`)
+      if (s) ctx.drawImage(s, Math.round(x), Math.round(y))
+    }
+    const br = spr('bridge.stone')
+    if (br) ctx.drawImage(br, Math.round(24 + ox), Math.round(23 * T - br.height + oy))
+    for (const o of flats) {
+      if (o.x1 + ox > 0 && o.x0 + ox < cam.w && o.y1 + oy > 0 && o.y0 + oy < cam.h) drawStatic(ctx, o, ox, oy, S)
     }
 
     const list = []
@@ -736,45 +780,11 @@ export function createTownScene({ engine, district = 0, plots = [], players = []
       }
       ctx.globalAlpha = 1
       ctx.globalCompositeOperation = 'source-over'
-      drawSkyBodies(ctx, cam, t, S)
-    } else drawSkyBodies(ctx, cam, t, S)
+    }
 
     weather.draw(ctx, cam, t)
 
     for (const p of shown) drawTags(ctx, p, ox, oy, S)
-  }
-
-  function drawSkyBodies(ctx, cam, t, S) {
-    const night = clamp((sky.strength - 0.2) / 0.25)
-    if (night > 0.02) {
-      const st = spr('sky.stars')
-      if (st) {
-        for (let y = 0; y < 2; y++) for (let x = 0; x * 64 < cam.w; x++) {
-          if (y * 32 > cam.h / 3) continue
-          const tw = S.red ? 1 : 0.75 + 0.25 * Math.sin(t * 2 + x * 1.7 + y)
-          ctx.globalAlpha = night * 0.8 * tw
-          ctx.drawImage(st, x * 64, y * 32)
-        }
-        ctx.globalAlpha = 1
-      }
-      const m = spr('sky.moon')
-      if (m) {
-        const u = clamp((((hour - 18 + 24) % 24)) / 12)
-        ctx.globalAlpha = night
-        ctx.drawImage(m, Math.round(8 + u * (cam.w - 32)), Math.round(6 + (1 - Math.sin(Math.PI * u)) * 12))
-        ctx.globalAlpha = 1
-      }
-    }
-    const day = 1 - clamp(sky.strength / 0.3)
-    if (day > 0.02 && hour > 6 && hour < 19) {
-      const s = spr('sky.sun')
-      if (s) {
-        const u = clamp((hour - 6) / 13)
-        ctx.globalAlpha = day
-        ctx.drawImage(s, Math.round(8 + u * (cam.w - 32)), Math.round(6 + (1 - Math.sin(Math.PI * u)) * 12))
-        ctx.globalAlpha = 1
-      }
-    }
   }
 
   scene.setPlayers(players)
