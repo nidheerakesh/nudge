@@ -47,7 +47,7 @@ test('landmarks have doors on the square and do not overlap plots', () => {
   for (const l of T.landmarks) {
     assert.ok(inR(l.door.x, l.door.y, l));
     assert.equal(l.door.y, l.y + l.h - 1);
-    assert.ok(inR(l.door.x, l.door.y + 1, T.square), l.kind);
+    assert.ok(WALK.has(T.ground[l.door.y + 1][l.door.x]), l.kind);
     assert.ok(sq.has(l.door.x + ',' + (l.door.y + 1)), l.kind + ' outside tile');
     assert.ok(sq.has(l.door.x + ',' + l.door.y), l.kind + ' door');
     for (const p of T.plots) assert.ok(!ov(l, p), l.kind);
@@ -102,11 +102,33 @@ test('gates connect to the square and sit on road', () => {
 test('decor sits on grass outside plots', () => {
   assert.ok(T.decor.length > 20);
   const kinds = new Set(T.decor.map(d => d.kind));
-  for (const k of ['tree', 'bush', 'flower', 'lamp', 'bench', 'fence']) assert.ok(kinds.has(k), k);
+  for (const k of ['tree', 'bush', 'flower', 'flowerbed', 'lamp', 'bench', 'fence']) assert.ok(kinds.has(k), k);
   for (const d of T.decor) {
     assert.ok(T.ground[d.y][d.x] <= 2);
     for (const p of T.plots) assert.ok(!inR(d.x, d.y, p));
   }
+});
+
+test('plaza, fountain, landmark doors, lilies and trees', () => {
+  const flat = T.ground.flat();
+  assert.ok(flat.filter(t => t === 5).length >= 120);
+  const f = T.fountain;
+  assert.equal(f.w, 4);
+  assert.equal(f.h, 3);
+  for (let y = f.y; y < f.y + f.h; y++) for (let x = f.x; x < f.x + f.w; x++) assert.equal(T.ground[y][x], 5);
+  const sq = reach(27, 19);
+  for (const l of T.landmarks) {
+    assert.ok(WALK.has(T.ground[l.door.y][l.door.x]), l.kind);
+    assert.equal(l.door.x, l.x + (l.kind === 'townhall' ? 3 : 2));
+    assert.ok([3, 4, 5].includes(T.ground[l.door.y + 1][l.door.x]), l.kind + ' front');
+    assert.ok(sq.has(l.door.x + ',' + (l.door.y + 1)), l.kind + ' reach');
+  }
+  assert.ok(T.lilies.length >= 4 && T.lilies.length <= 8);
+  for (const l of T.lilies) assert.equal(T.ground[l.y][l.x], 6);
+  const trees = T.decor.filter(d => d.kind === 'tree');
+  assert.ok(trees.length >= 60);
+  assert.ok(trees.filter(d => d.treeKind === 'cherry').length >= trees.length * 0.25);
+  for (const t of trees) assert.ok(['cherry', 'green', 'pine'].includes(t.treeKind));
 });
 
 test('spiral order', () => {
