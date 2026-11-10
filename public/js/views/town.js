@@ -9,6 +9,7 @@ import { TICK_MS } from '/town/shared/protocol.js';
 import { createTimerWidget } from '/town/ui/timerwidget.js';
 import { createKnock, whyText } from '/town/ui/knock.js';
 import { createChat } from '/town/ui/chat.js';
+import { kicon } from '/town/ui/icons.js';
 
 const PRESETS = [
   { skin: 1, hair: 1, hair_color: 1 }, { skin: 2, hair: 2, hair_color: 2 }, { skin: 3, hair: 3, hair_color: 3 },
@@ -75,8 +76,8 @@ function mount(c0) {
   const names = new Map();
 
   const el = h('div', { style: { position: 'relative', overflow: 'hidden', background: 'var(--bg)' } });
-  const pills = h('div', { class: 'row', style: { position: 'absolute', left: '8px', right: '8px', top: '8px', zIndex: '4', pointerEvents: 'none' } });
-  const banner = h('div', { class: 'card small', role: 'status', hidden: true, style: { position: 'absolute', left: '8px', right: '8px', top: '60px', zIndex: '3' } });
+  const pills = h('div', { class: 'k-hud', style: { position: 'absolute', left: '8px', right: '8px', top: '8px', zIndex: '4', pointerEvents: 'none' } });
+  const banner = h('div', { class: 'k-panel small', role: 'status', hidden: true, style: { position: 'absolute', left: '8px', right: '8px', top: '60px', zIndex: '3' } });
   S.el = el;
 
   const uid = () => (S.c.S.user && S.c.S.user.id) || (me && me.plot && me.plot.uid) || 0;
@@ -114,17 +115,18 @@ function mount(c0) {
     returnToStreet: () => returnToStreet(),
     onBalance: (n, quiet) => {
       if (me && typeof n === 'number') me.balance = n;
-      coin.textContent = '\u{1FA99} ' + (me ? me.balance : 0);
+      coinNum.textContent = String(me ? me.balance : 0);
       coin.setAttribute('aria-label', 'Coins: ' + (me ? me.balance : 0));
     },
   };
 
-  const coin = h('span', { class: 'badge', style: { pointerEvents: 'auto', minHeight: '44px', padding: '0 12px', fontSize: '15px', background: 'var(--card)' }, role: 'status' }, '');
+  const coinNum = h('span', null, '');
+  const coin = h('span', { class: 'k-pill', style: { pointerEvents: 'auto' }, role: 'status' }, kicon('coin'), coinNum);
 
-  const pill = (label, fn, extra) => h('button', {
-    class: 'btn', type: 'button', 'aria-label': label, onclick: fn,
-    style: { pointerEvents: 'auto', background: 'var(--card)', ...(extra || {}) },
-  }, label);
+  const pill = (label, fn, extra, icon) => h('button', {
+    class: 'k-btn', type: 'button', 'aria-label': label, title: label, onclick: fn,
+    style: { pointerEvents: 'auto', ...(extra || {}) },
+  }, kicon(icon), h('span', { class: 'k-lbl' }, label));
 
   const say = (msg) => { banner.textContent = msg || ''; banner.hidden = !msg; };
   const showInTown = () => store.pref('show_in_town', '1') !== '0';
@@ -168,20 +170,19 @@ function mount(c0) {
       cv.style.cssText = 'width:64px;height:64px;image-rendering:pixelated';
       try { cv.getContext('2d').drawImage(portrait({ ...p, accessory: null }), 0, 0); } catch (e) { /* no art */ }
       const b = h('button', {
-        class: 'btn', type: 'button', 'aria-label': 'Look ' + (i + 1), 'aria-pressed': String(i === pick),
-        style: { width: '72px', height: '72px', padding: '0', borderWidth: i === pick ? '3px' : '1px', borderColor: i === pick ? 'var(--accent)' : 'var(--line)' },
+        class: 'k-chip' + (i === pick ? ' on' : ''), type: 'button', 'aria-label': 'Look ' + (i + 1), 'aria-pressed': String(i === pick),
+        style: { width: '72px', height: '72px' },
         onclick: () => {
           pick = i;
           btns.forEach((x, j) => {
             x.setAttribute('aria-pressed', String(j === i));
-            x.style.borderWidth = j === i ? '3px' : '1px';
-            x.style.borderColor = j === i ? 'var(--accent)' : 'var(--line)';
+            x.classList.toggle('on', j === i);
           });
         },
       }, cv);
       return b;
     });
-    const go = h('button', { class: 'btn primary', type: 'button', 'aria-label': 'Move in', onclick: async () => {
+    const go = h('button', { class: 'k-btn pink', type: 'button', 'aria-label': 'Move in', onclick: async () => {
       go.disabled = true;
       try {
         await tctx.post('/join', {});
@@ -199,7 +200,7 @@ function mount(c0) {
     } }, 'Move in');
     el.style.height = '';
     el.replaceChildren(h('div', { class: 'wrap col', style: { paddingTop: '16px', paddingBottom: '24px' } },
-      h('h2', null, 'Welcome to Nudge Town'),
+      h('h2', null, h('span', { class: 'k-title' }, 'Welcome to Nudge Town')),
       h('p', { class: 'muted' }, 'A cozy place to study alongside friends. Pick a look and name your house.'),
       h('div', { class: 'card col' },
         h('div', { role: 'group', 'aria-label': 'Choose a look', class: 'row' }, ...btns),
@@ -483,7 +484,7 @@ function mount(c0) {
   });
 
   // ---------- map ----------
-  const mapBox = h('div', { class: 'card', hidden: true, style: { position: 'absolute', left: '8px', top: '60px', zIndex: '4', padding: '8px' } });
+  const mapBox = h('div', { class: 'k-panel', hidden: true, style: { position: 'absolute', left: '8px', top: '60px', zIndex: '4', padding: '8px' } });
   function toggleMap() {
     mapBox.hidden = !mapBox.hidden;
     if (!mapBox.hidden) {
@@ -559,14 +560,14 @@ function mount(c0) {
   }
 
   // ---------- boot ----------
-  const chatPill = pill('Chat', () => chat.toggle(), { display: '' });
+  const chatPill = pill('Chat', () => chat.toggle(), { display: '' }, 'chat');
   chatPill.hidden = true;
-  const wardPill = pill('Wardrobe', () => lazy('/town/ui/wardrobe.js', 'openWardrobe'));
-  const housePill = pill('House', () => lazy('/town/ui/houseeditor.js', 'openHouseEditor'));
+  const wardPill = pill('Wardrobe', () => lazy('/town/ui/wardrobe.js', 'openWardrobe'), null, 'shirt');
+  const housePill = pill('House', () => lazy('/town/ui/housedit.js', 'openHouseEditor'), null, 'house');
 
   async function start() {
     tctx.onBalance(me.balance);
-    pills.replaceChildren(coin, pill('Map', toggleMap), chatPill, wardPill, housePill, pill('Settings', settings));
+    pills.replaceChildren(coin, pill('Map', toggleMap, null, 'map'), chatPill, wardPill, housePill, pill('Settings', settings, null, 'gear'));
     canvas = h('canvas', {
       role: 'img', tabindex: '0',
       'aria-label': 'Nudge Town. Use the arrow keys or tap to walk around. Walk to a door to knock.',
