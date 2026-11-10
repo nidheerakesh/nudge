@@ -46,6 +46,9 @@ function windowOn(g) {
   rect(g, 2, 12, 12, 2, 'O');
   rect(g, 3, 12, 10, 1, 'a');
   rect(g, 3, 13, 10, 1, 'd');
+  rect(g, 3, 12, 10, 1, 'h');
+  for (const x of [4, 7, 10]) put(g, x, 12, 'n');
+  put(g, 5, 12, 'l'); put(g, 11, 12, 'l');
 }
 
 // Roofs
@@ -110,6 +113,27 @@ function roofPiece(st, kind) {
     if (inside && kind !== 'peak') put(g, x, 15, eave);
   }
   if (kind === 'peak') { for (let x = 0; x < 16; x++) if (g[14][x] !== '.') put(g, x, 15, st.d); }
+  return out(g, 16, 16);
+}
+
+// Rectangular roof pieces (ridge, body, eave) for the 3/4 front view
+function roofRect(st, part, side) {
+  const g = grid(16, 16);
+  roofFill(g, st, () => true);
+  for (let x = 0; x < 16; x++) put(g, x, 15, st.m);
+  if (part === 'ridge') {
+    rect(g, 0, 0, 16, 1, 'O');
+    rect(g, 0, 1, 16, 1, st.l);
+    rect(g, 0, 2, 16, 1, st.m);
+  }
+  if (part === 'eave') {
+    rect(g, 0, 13, 16, 1, st.d);
+    rect(g, 0, 14, 16, 1, 'O');
+    rect(g, 0, 15, 16, 1, st.d);
+  }
+  if (side === 'l') rect(g, 0, 0, 1, part === 'eave' ? 15 : 16, 'O');
+  if (side === 'r') rect(g, 15, 0, 1, part === 'eave' ? 15 : 16, 'O');
+  if (part === 'eave') { if (side === 'l') put(g, 0, 15, '.'); if (side === 'r') put(g, 15, 15, '.'); }
   return out(g, 16, 16);
 }
 
@@ -234,6 +258,11 @@ for (const mat of Object.keys(WALLS)) {
 for (const [s, st] of Object.entries(ROOFS)) {
   for (const k of ['l', 'm', 'r', 'peak']) sprites[`roof.${s}.${k}`] = roofPiece(st, k);
 }
+for (const [s2, st] of Object.entries(ROOFS)) {
+  for (const part of ['ridge', 'body', 'eave']) {
+    for (const sd of ['l', 'm', 'r']) sprites[`roof.${s2}.${part}.${sd}`] = roofRect(st, part, sd);
+  }
+}
 for (const [c, col] of Object.entries(DOORS)) {
   sprites[`door.${c}.closed`] = drawDoor(col, false);
   sprites[`door.${c}.open`] = drawDoor(col, true);
@@ -262,6 +291,8 @@ export function doorTile(sizeId) {
   return { x: Math.floor((s.w - 1) / 2), y: s.h - 1 };
 }
 
+export const HOUSE_ROOF_ROWS = 3;
+
 export function composeHouse(look = {}, opts = {}) {
   const sz = key(look.size, 'house');
   const roof = ROOFS[key(look.roof, 'roof')] ? key(look.roof, 'roof') : 'red';
@@ -270,24 +301,22 @@ export function composeHouse(look = {}, opts = {}) {
   const { w, h } = houseSize(sz);
   const dt = doorTile(sz);
   const P = [];
-  for (let tx = 0; tx < w; tx++) {
-    let k = w === 1 ? 'peak' : tx === 0 ? 'l' : tx === w - 1 ? 'r' : 'm';
-    if (w >= 3 && h >= 3 && tx === Math.floor((w - 1) / 2)) k = 'peak';
-    P.push({ sprite: `roof.${roof}.${k}`, x: tx * 16, y: 0 });
-  }
-  for (let ty = 0; ty < h; ty++) {
+  const roofRows = h + HOUSE_ROOF_ROWS - 1;
+  for (let ty = 0; ty < roofRows; ty++) {
+    const part = ty === 0 ? 'ridge' : ty === roofRows - 1 ? 'eave' : 'body';
     for (let tx = 0; tx < w; tx++) {
-      const isDoor = tx === dt.x && ty === dt.y;
-      const win = !isDoor && h + w > 2 && (tx + ty) % 2 === (w > 1 ? 0 : 1) && !(w === 1);
-      const x = tx * 16, y = 16 + ty * 16;
-      if (isDoor) P.push({ sprite: `door.${door}.${opts.doorOpen ? 'open' : 'closed'}`, x, y });
-      else {
-        P.push({ sprite: `wall.${wall}.${win ? 'window' : 'base'}`, x, y });
-        if (win && opts.night) P.push({ sprite: 'window.lit', x, y });
-      }
+      const sd = w === 1 ? 'm' : tx === 0 ? 'l' : tx === w - 1 ? 'r' : 'm';
+      P.push({ sprite: `roof.${roof}.${part}.${sd}`, x: tx * 16, y: ty * 16 });
     }
   }
-  if (w >= 2) P.push({ sprite: 'chimney', x: w * 16 - 20, y: 4 });
+  const wy = roofRows * 16;
+  for (let tx = 0; tx < w; tx++) {
+    const x = tx * 16;
+    if (tx === dt.x) { P.push({ sprite: `door.${door}.${opts.doorOpen ? 'open' : 'closed'}`, x, y: wy }); continue; }
+    P.push({ sprite: `wall.${wall}.window`, x, y: wy });
+    if (opts.night) P.push({ sprite: 'window.lit', x, y: wy });
+  }
+  if (w >= 2) P.push({ sprite: 'chimney', x: w * 16 - 28, y: 6 });
   return P;
 }
 
