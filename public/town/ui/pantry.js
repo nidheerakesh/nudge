@@ -32,9 +32,9 @@ export function openPantry(ctx) {
       if (!rows.length) { list.replaceChildren(empty ? empty('Your pantry is empty. Visit the bakery.') : h('p', { class: 'muted' }, 'Your pantry is empty. Visit the bakery.')); return; }
       list.replaceChildren(...rows.map(([id, q]) => {
         const it = byId(id);
-        return h('div', { class: 'card row', style: { justifyContent: 'space-between', alignItems: 'center', marginBottom: '0' } },
+        return h('div', { class: 'k-panel row', style: { justifyContent: 'space-between', alignItems: 'center', marginBottom: '0' } },
           h('div', { class: 'col' }, h('strong', null, it.name), h('span', { class: 'small' }, 'x' + q)),
-          h('button', { class: 'btn primary', type: 'button', disabled: busy, 'aria-label': 'Eat ' + it.name, style: { minHeight: '44px' }, onclick: () => eat(id) }, 'Eat'));
+          h('button', { class: 'k-btn pink', type: 'button', disabled: busy, 'aria-label': 'Eat ' + it.name, style: { minHeight: '44px' }, onclick: () => eat(id) }, 'Eat'));
       }));
     };
     async function eat(id) {
@@ -57,7 +57,7 @@ export function openPantry(ctx) {
     }
     redraw();
     timer = setInterval(tickStatus, 30000);
-    ctx.ui.sheet('Pantry', h('div', { class: 'col' }, h('div', { class: 'row', style: { justifyContent: 'center' } }, pv.el), status, list), {
+    ctx.ui.sheet('Pantry', h('div', { class: 'k-panel col', style: { padding: '12px' } }, h('div', { class: 'row', style: { justifyContent: 'center' } }, pv.el), status, list), {
       onClose: () => { clearInterval(timer); pv.stop(); res(); },
     });
   });

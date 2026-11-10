@@ -1,3 +1,4 @@
+import { kicon } from './icons.js'
 import { CHAT_MAX, CHAT_RATE_MS } from '../shared/protocol.js'
 
 const MAX_LOG = 100
@@ -8,7 +9,7 @@ export function createChat({ ui, host, selfId, isOwner, send, onReport, onBlock 
   const log = h('div', { role: 'log', 'aria-live': 'polite', 'aria-label': 'House chat messages', class: 'col', style: { overflowY: 'auto', flex: '1 1 auto', minHeight: '80px', maxHeight: '28vh' } })
   const note = h('div', { class: 'small', role: 'status' })
   const members = h('div', { class: 'col' })
-  const input = h('input', { type: 'text', maxlength: String(CHAT_MAX), placeholder: 'Say something kind', 'aria-label': 'Chat message', autocomplete: 'off', style: { flex: '1 1 auto', minHeight: '44px', minWidth: '0' } })
+  const input = h('input', { type: 'text', maxlength: String(CHAT_MAX), placeholder: 'Say something kind', 'aria-label': 'Chat message', autocomplete: 'off', style: { flex: '1 1 auto', minHeight: '44px', minWidth: '0', border: '2px solid var(--k-edge)', borderRadius: '999px', padding: '0 14px' } })
   let lastSent = 0
   let noteT = 0
   let shut = true
@@ -34,20 +35,20 @@ export function createChat({ ui, host, selfId, isOwner, send, onReport, onBlock 
     else if (e.key === 'Escape') panel.close()
   })
 
-  const iconBtn = (label, text, fn) => h('button', { class: 'btn icon', type: 'button', 'aria-label': label, title: label, onclick: fn }, text)
+  const iconBtn = (label, text, fn) => h('button', { class: 'k-btn icon', type: 'button', 'aria-label': label, title: label, onclick: fn }, text)
 
   const root = h('section', {
     'aria-label': 'House chat', hidden: true,
-    class: 'card col',
-    style: { position: 'absolute', left: '8px', right: '8px', bottom: '8px', zIndex: '5', maxWidth: '420px', maxHeight: '60%', boxShadow: '0 6px 20px rgba(0,0,0,.28)' },
+    class: 'k-panel col',
+    style: { position: 'absolute', left: '8px', right: '8px', bottom: '8px', zIndex: '5', maxWidth: '420px', maxHeight: '60%', padding: '12px' },
   },
-  h('div', { class: 'row' }, h('strong', { class: 'grow' }, 'House chat'),
-    iconBtn('Close chat', 'x', () => panel.close())),
+  h('div', { class: 'row' }, h('span', { class: 'k-title grow' }, 'House chat'),
+    iconBtn('Close chat', kicon('close', 20), () => panel.close())),
   members, log, note,
   h('div', { class: 'row', style: { flexWrap: 'nowrap' } }, input,
-    iconBtn('Send cheer', '\u{1F389}', () => send({ t: 'emote', k: 'cheer' })),
-    iconBtn('Send heart', '❤️', () => send({ t: 'emote', k: 'heart' })),
-    h('button', { class: 'btn primary', type: 'button', 'aria-label': 'Send message', onclick: go }, 'Send')))
+    iconBtn('Send cheer', kicon('party', 20), () => send({ t: 'emote', k: 'cheer' })),
+    iconBtn('Send heart', kicon('heart', 20), () => send({ t: 'emote', k: 'heart' })),
+    h('button', { class: 'k-btn pink', type: 'button', 'aria-label': 'Send message', onclick: go }, kicon('send', 20), 'Send')))
   host.append(root)
 
   const line = c => {
@@ -82,7 +83,7 @@ export function createChat({ ui, host, selfId, isOwner, send, onReport, onBlock 
       const me = selfId()
       members.replaceChildren(...(list || []).filter(p => p.id !== me).map(p => {
         const acts = h('div', { class: 'row', hidden: true })
-        const add = (label, fn) => acts.append(h('button', { class: 'btn', type: 'button', 'aria-label': label + ' ' + p.name, onclick: fn }, label))
+        const add = (label, fn) => acts.append(h('button', { class: 'k-btn', type: 'button', 'aria-label': label + ' ' + p.name, onclick: fn }, label))
         if (isOwner()) {
           add('Mute', () => { send({ t: 'mute', user: p.id }); say(p.name + ' is muted') })
           add('Kick', async () => {
@@ -96,9 +97,9 @@ export function createChat({ ui, host, selfId, isOwner, send, onReport, onBlock 
           if (await ui.confirmBox('Block ' + p.name + '? You will not see each other in town.', { ok: 'Block', danger: true })) onBlock(p)
         })
         const tog = h('button', {
-          class: 'btn icon ghost', type: 'button', 'aria-expanded': 'false', 'aria-label': 'Options for ' + p.name,
+          class: 'k-btn icon', type: 'button', 'aria-expanded': 'false', 'aria-label': 'Options for ' + p.name,
           onclick: () => { acts.hidden = !acts.hidden; tog.setAttribute('aria-expanded', String(!acts.hidden)) },
-        }, '⋯')
+        }, kicon('more', 20))
         return h('div', { class: 'col' },
           h('div', { class: 'row', style: { flexWrap: 'nowrap' } }, h('span', { class: 'grow' }, p.name || 'Someone'), tog), acts)
       }))

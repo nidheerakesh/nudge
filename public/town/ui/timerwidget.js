@@ -1,3 +1,4 @@
+import { kicon } from './icons.js'
 const NS = 'http://www.w3.org/2000/svg'
 
 function svg(tag, attrs, ...kids) {
@@ -31,10 +32,10 @@ const fmt = ms => {
 export function createTimerWidget({ ui, store }) {
   const { h } = ui
   const time = h('span', { style: { font: '700 22px/1 "Plus Jakarta Sans",system-ui,sans-serif', fontVariantNumeric: 'tabular-nums', minWidth: '58px', textAlign: 'center' }, 'aria-live': 'off' }, '')
-  const btn = h('button', { class: 'btn icon', type: 'button', style: { borderRadius: '50%' } })
+  const btn = h('button', { class: 'k-btn pink icon', type: 'button' })
   const wrap = h('div', {
-    role: 'group', 'aria-label': 'Focus timer',
-    style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px 6px 12px', background: 'var(--card)', border: '1px solid var(--line)', borderRadius: '999px', boxShadow: '0 4px 14px rgba(0,0,0,.18)' },
+    role: 'group', 'aria-label': 'Focus timer', class: 'k-pill',
+    style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px 6px 12px' },
   }, tomato(), time, btn)
   let busy = false
 
@@ -42,7 +43,7 @@ export function createTimerWidget({ ui, store }) {
     const t = store.timer()
     const paused = !t || !!t.paused_at
     time.textContent = t ? fmt(store.remainingMs(t)) : fmt(Number(store.pref('focus_mins', 45)) * 60000)
-    btn.replaceChildren(glyph(paused))
+    btn.replaceChildren(kicon(paused ? 'play' : 'pause', 20))
     btn.setAttribute('aria-label', !t ? 'Start focus timer' : t.paused_at ? 'Resume focus timer' : 'Pause focus timer')
   }
 

@@ -42,7 +42,7 @@ function styleSheet(ctx) {
       }));
       modeBox.replaceChildren(chips(MODES, mode, (v) => { mode = v; draw(); }));
     };
-    const save = h('button', { class: 'btn primary', type: 'button', style: { minHeight: '44px' }, onclick: async () => {
+    const save = h('button', { class: 'k-btn pink', type: 'button', style: { minHeight: '44px' }, onclick: async () => {
       if (busy) return;
       busy = true;
       try {
@@ -61,7 +61,7 @@ function styleSheet(ctx) {
       rows,
       h('strong', null, 'Door'), modeBox,
       save);
-    const box = ctx.ui.sheet('Style your house', body, { onClose: res });
+    const box = ctx.ui.sheet('Style your house', h('div', { class: 'k-panel col', style: { padding: '12px' } }, body), { onClose: res });
   });
 }
 
@@ -96,15 +96,15 @@ function furnish(ctx) {
     const redraw = () => {
       const items = scene.items();
       const owned = ids('furn').filter((id) => owns(ctx, id));
-      inv.replaceChildren(...owned.map((id) => h('button', { class: 'chip' + (pick === id ? ' on' : ''), type: 'button', 'aria-pressed': String(pick === id), 'aria-label': 'Place ' + byId(id).name, style: { minHeight: '44px', flex: '0 0 auto' }, onclick: () => { pick = pick === id ? null : id; sel = -1; moving = false; say(pick ? 'Tap a tile to place ' + byId(id).name + '.' : ''); redraw(); } }, byId(id).name)));
-      const b = (label, fn, dis) => h('button', { class: 'btn', type: 'button', 'aria-label': label, disabled: !!dis, style: { minHeight: '44px' }, onclick: fn }, label);
+      inv.replaceChildren(...owned.map((id) => h('button', { class: 'k-chip' + (pick === id ? ' on' : ''), type: 'button', 'aria-pressed': String(pick === id), 'aria-label': 'Place ' + byId(id).name, style: { minHeight: '44px', flex: '0 0 auto' }, onclick: () => { pick = pick === id ? null : id; sel = -1; moving = false; say(pick ? 'Tap a tile to place ' + byId(id).name + '.' : ''); redraw(); } }, byId(id).name)));
+      const b = (label, fn, dis) => h('button', { class: 'k-btn', type: 'button', 'aria-label': label, disabled: !!dis, style: { minHeight: '44px' }, onclick: fn }, label);
       const cur = sel >= 0 ? items[sel] : null;
       tools.replaceChildren(
         h('span', { class: 'badge' }, items.length + '/' + MAX_ITEMS),
         cur ? b(moving ? 'Tap new tile' : 'Move', () => { moving = !moving; say(moving ? 'Tap a tile to move it there.' : ''); redraw(); }) : null,
         cur ? b('Flip', () => reflip(), false) : null,
         cur ? b('Delete', () => { scene.remove(sel); sel = -1; moving = false; say('Removed.'); redraw(); }) : null,
-        h('button', { class: 'btn primary', type: 'button', disabled: busy || !dirty(), style: { minHeight: '44px' }, onclick: save }, 'Save'),
+        h('button', { class: 'k-btn pink', type: 'button', disabled: busy || !dirty(), style: { minHeight: '44px' }, onclick: save }, 'Save'),
         b('Done', leave));
     };
     function reflip() {
@@ -171,7 +171,7 @@ function furnish(ctx) {
       ctx.engine.setScene(fresh);
       res();
     }
-    const tray = h('div', { role: 'region', 'aria-label': 'Furniture editor', style: { position: 'fixed', left: '0', right: '0', bottom: '0', zIndex: '40', background: 'var(--card, #fff)', borderTop: '1px solid var(--line)', padding: '10px 12px calc(10px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: '8px' } },
+    const tray = h('div', { role: 'region', 'aria-label': 'Furniture editor', class: 'k-panel', style: { position: 'fixed', left: '0', right: '0', bottom: '0', zIndex: '40', background: 'var(--card, #fff)', borderTop: '1px solid var(--line)', padding: '10px 12px calc(10px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: '8px' } },
       info, inv, tools);
     document.body.appendChild(tray);
     redraw();
@@ -185,9 +185,9 @@ export async function openHouseEditor(ctx) {
     let pickd = null;
     const go = (m) => { pickd = m; box.close(); };
     const body = h('div', { class: 'col' },
-      h('button', { class: 'btn primary', type: 'button', style: { minHeight: '44px' }, onclick: () => go('style') }, 'Style: roof, walls, door, name'),
-      h('button', { class: 'btn primary', type: 'button', style: { minHeight: '44px' }, onclick: () => go('furnish') }, 'Furnish: place furniture inside'));
-    const box = ctx.ui.sheet('Your house', body, { onClose: () => res(pickd) });
+      h('button', { class: 'k-btn pink', type: 'button', style: { minHeight: '44px' }, onclick: () => go('style') }, 'Style: roof, walls, door, name'),
+      h('button', { class: 'k-btn pink', type: 'button', style: { minHeight: '44px' }, onclick: () => go('furnish') }, 'Furnish: place furniture inside'));
+    const box = ctx.ui.sheet('Your house', h('div', { class: 'k-panel col', style: { padding: '12px' } }, body), { onClose: () => res(pickd) });
   });
   if (choice === 'style') await styleSheet(ctx);
   else if (choice === 'furnish') await furnish(ctx);
