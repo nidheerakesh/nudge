@@ -42,7 +42,8 @@ const mirror = (sp) => ({ w: sp.w, h: sp.h, rows: sp.rows.map((r) => [...r].reve
 function grass(seed, tufts, flowers) {
   const r = mkrng(seed);
   const g = G(16, 16).r(0, 0, 16, 16, 'h');
-  for (let i = 0; i < 9; i++) g.p((r() * 16) | 0, (r() * 16) | 0, i % 3 ? 'g' : 'i');
+  for (let i = 0; i < 14; i++) g.p((r() * 16) | 0, (r() * 16) | 0, i % 3 ? 'g' : 'i');
+  for (let i = 0; i < 5; i++) { const x = (r() * 15) | 0, y = (r() * 15) | 0; g.p(x, y, 'g').p(x + 1, y, 'g'); }
   for (let i = 0; i < tufts; i++) {
     const x = 1 + ((r() * 13) | 0), y = 2 + ((r() * 12) | 0);
     g.p(x, y, 'i').p(x + 1, y, 'i').p(x, y - 1, 'i').p(x + 1, y - 2, 'g');
@@ -70,16 +71,13 @@ S['tile.2'] = grass(37, 2, 2);
 (function () {
   const r = mkrng(9);
   const g = G(16, 16).r(0, 0, 16, 16, 'd');
-  for (let i = 0; i < 26; i++) g.p((r() * 16) | 0, (r() * 16) | 0, i % 3 ? 'c' : 'e');
+  [[0, 0, 7, 5], [8, 0, 8, 5], [0, 6, 4, 5], [5, 6, 7, 5], [13, 6, 3, 5], [0, 12, 8, 4], [9, 12, 7, 4]].forEach(([x, y, w, h], k) => { g.r(x, y, w, h, k % 2 ? 'c' : 'b'); g.r(x, y, w, 1, 'a'); g.r(x, y + h - 1, w, 1, 'd'); });
+  for (let i = 0; i < 6; i++) g.p((r() * 16) | 0, (r() * 16) | 0, 'e');
   S['tile.4'] = g.s();
 })();
 (function () {
   const g = G(16, 16).r(0, 0, 16, 16, 'c');
-  const rowsAt = [0, 4, 8, 12];
-  rowsAt.forEach((y, k) => {
-    g.r(0, y + 3, 16, 1, 'd');
-    for (let x = (k % 2) * 4; x < 16 + 4; x += 8) { for (let j = 0; j < 4; j++) g.p(x % 16, y + j, 'd'); g.p((x + 2) % 16, y, 'b'); g.p((x + 3) % 16, y, 'b'); g.p((x + 1) % 16, y + 1, 'b'); }
-  });
+  [[4, 3], [12, 3], [0, 8], [8, 8], [16, 8], [4, 13], [12, 13]].forEach(([x, y]) => { for (const dx of [0, 16, -16]) { g.e(x + dx, y, 4, 3, 'b').e(x + dx - 0.5, y - 0.7, 3, 2, 'a'); } });
   S['tile.5'] = g.s();
 })();
 (function () {
@@ -91,7 +89,7 @@ S['tile.2'] = grass(37, 2, 2);
       const sx = (x + f * 2 + k) % 16;
       for (let i = 0; i < 4; i++) g.p((sx + i) % 16, (y + (i === 1 || i === 2 ? 0 : 1)) % 16, 't');
     });
-    g.p((3 + f * 4) % 16, 6, 's').p((11 + f * 3) % 16, 14, 's');
+    g.p((3 + f * 4) % 16, 6, 'W').p((11 + f * 3) % 16, 14, 'W').p((7 + f * 5) % 16, 10, 's').p((3 + f * 4) % 16, 7, 's');
     const id = `tile.6.${f}`;
     S[id] = g.s();
     fr.push(id);
@@ -104,7 +102,7 @@ S['tile.2'] = grass(37, 2, 2);
     const g = G(16, 16);
     for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
       const d = land(x, y);
-      g.p(x, y, d < 3 ? 'a' : d < 4 ? 'b' : d < 5 ? 's' : d < 6 ? 't' : (x * 7 + y * 3) % 11 === 0 ? 't' : 'u');
+      g.p(x, y, d < 2 ? 'h' : d < 3 ? 'g' : d < 4 ? 'c' : d < 5 ? 's' : d < 6 ? 't' : (x * 7 + y * 3) % 11 === 0 ? 't' : 'u');
     }
     return g.s();
   };
@@ -155,54 +153,60 @@ S['tile.9'] = deck(false).s();
 })();
 
 // ---------- trees ----------
+const blob = (g, cx, cy, rx, ry, pal) => {
+  g.e(cx, cy, rx, ry, pal[2]).e(cx - 1, cy - 1.5, rx - 1.5, ry - 2, pal[1]).e(cx - rx * 0.28, cy - ry * 0.34, rx * 0.5, ry * 0.45, pal[0]);
+};
+function treeShadow(g, cx, y, rx, c) { g.e(cx, y, rx, 3, c); }
 function tree(w, kind, sway) {
-  const g = G(w, 40);
-  const cx = w / 2, dx = sway;
-  const pal = {
-    cherry: ['m', 'n', 'o'], green: ['g', 'h', 'i'], autumn: ['b', 'c', 'o'],
-  }[kind];
-  const tw = 4;
-  g.r(cx - tw / 2, 26, tw, 13, 'e').r(cx - tw / 2, 26, 1, 13, 'd').r(cx - 4, 37, 8, 2, 'e').r(cx - 2, 36, 1, 1, 'd');
-  g.ol();
-  const cv = G(w, 40);
-  cv.e(cx + dx, 16, 14, 14, pal[1]).e(cx - 8 + dx, 20, 8, 8, pal[1]).e(cx + 8 + dx, 20, 8, 8, pal[1]);
-  // shading: lower right dark, upper left light
-  const base = cv.g.map((r) => r.slice());
-  for (let y = 0; y < 40; y++) for (let x = 0; x < w; x++) {
-    if (base[y][x] === '.') continue;
-    const u = (x - cx - dx) + (y - 16);
-    if (u < -12 || (x < cx + dx - 5 && y < 12)) cv.g[y][x] = pal[0];
-    else if (u > 10 || y > 27) cv.g[y][x] = pal[2];
-  }
-  const r = mkrng(w + kind.length * 7);
-  for (let i = 0; i < 14; i++) {
-    const x = (r() * w) | 0, y = 3 + ((r() * 26) | 0);
-    if (cv.g[y][x] !== '.') cv.g[y][x] = kind === 'cherry' ? (i % 2 ? 'W' : 'p') : kind === 'autumn' ? (i % 2 ? 'o' : 'a') : (i % 2 ? 'g' : 'j');
+  const g = G(w, 64);
+  const cx = w / 2;
+  const pal = { cherry: ['m', 'n', 'o'], green: ['g', 'h', 'i'], autumn: ['b', 'c', 'o'] }[kind];
+  const sh = kind === 'cherry' ? 'h' : 'i';
+  treeShadow(g, cx, 61, 13, sh);
+  const tr = G(w, 64);
+  tr.r(cx - 3, 44, 6, 18, 'e').r(cx - 3, 44, 2, 18, 'd').r(cx - 5, 59, 10, 3, 'e').r(cx - 5, 59, 3, 1, 'd').r(cx + 1, 50, 1, 6, 'f');
+  tr.ol();
+  for (let y = 0; y < 64; y++) for (let x = 0; x < w; x++) if (tr.g[y][x] !== '.') g.g[y][x] = tr.g[y][x];
+  const cv = G(w, 64);
+  const d = sway;
+  blob(cv, cx + d, 22, 16, 16, pal);
+  blob(cv, cx - 11 + d, 30, 11, 10, pal);
+  blob(cv, cx + 11 + d, 30, 11, 10, pal);
+  blob(cv, cx + d, 38, 13, 8, pal);
+  const r = mkrng(w + kind.length * 13);
+  for (let i = 0; i < 26; i++) {
+    const x = (r() * w) | 0, y = 4 + ((r() * 40) | 0);
+    if (cv.g[y][x] === '.') continue;
+    cv.g[y][x] = kind === 'cherry' ? (i % 3 ? 'W' : 'p') : kind === 'autumn' ? (i % 2 ? 'o' : 'a') : (i % 2 ? 'g' : 'j');
   }
   cv.ol();
-  for (let y = 0; y < 40; y++) for (let x = 0; x < w; x++) if (cv.g[y][x] !== '.') g.g[y][x] = cv.g[y][x];
+  for (let y = 0; y < 64; y++) for (let x = 0; x < w; x++) if (cv.g[y][x] !== '.') g.g[y][x] = cv.g[y][x];
   return g.s();
 }
 function pine(sway) {
-  const g = G(24, 40);
-  g.r(10, 32, 4, 7, 'e').r(10, 32, 1, 7, 'd').ol();
-  const cv = G(24, 40);
-  [[4, 12, 12], [9, 8, 10], [15, 8, 9]].forEach(([y, hw, hh], k) => {
-    const top = [2, 11, 20][k], half = [7, 9, 11][k];
-    for (let j = 0; j < 12; j++) {
-      const wd = Math.max(1, Math.round(((j + 1) / 12) * half));
-      const x0 = 12 - wd + (j < 6 ? sway : 0);
-      for (let i = 0; i < wd * 2; i++) cv.p(x0 + i, top + j, i < wd * 0.7 ? 'i' : i > wd * 1.5 ? 'k' : 'j');
+  const g = G(32, 64);
+  treeShadow(g, 16, 61, 10, 'i');
+  const tr = G(32, 64);
+  tr.r(13, 50, 6, 12, 'e').r(13, 50, 2, 12, 'd').ol();
+  for (let y = 0; y < 64; y++) for (let x = 0; x < 32; x++) if (tr.g[y][x] !== '.') g.g[y][x] = tr.g[y][x];
+  const cv = G(32, 64);
+  [[2, 12, 9], [14, 14, 13], [28, 16, 15]].forEach(([top, hh, half], k) => {
+    const sw = k < 2 ? sway : 0;
+    for (let j = 0; j < hh + 6; j++) {
+      const wd = Math.max(1, Math.round(((j + 1) / (hh + 6)) * half));
+      const x0 = 16 - wd + (j < 8 ? sw : 0);
+      for (let i = 0; i < wd * 2; i++) cv.p(x0 + i, top + j, i < wd * 0.6 ? 'i' : i > wd * 1.45 ? 'k' : 'j');
+      if (j > hh) cv.p(x0 + 1 + (j % 3) * 2, top + j, 'k');
     }
-    for (let i = 0; i < 3; i++) cv.p(12 - 1 + i * 2 - 2 + sway, top + 8 + (i % 2), 'g');
+    for (let i = 0; i < 4; i++) cv.p(16 - 3 + i * 2 + sw, top + hh - 2 + (i % 2) * 2, 'i');
   });
   cv.ol();
-  for (let y = 0; y < 40; y++) for (let x = 0; x < 24; x++) if (cv.g[y][x] !== '.') g.g[y][x] = cv.g[y][x];
+  for (let y = 0; y < 64; y++) for (let x = 0; x < 32; x++) if (cv.g[y][x] !== '.') g.g[y][x] = cv.g[y][x];
   return g.s();
 }
 for (const k of ['cherry', 'green', 'autumn']) {
-  S[`tree.${k}.0`] = tree(32, k, 0);
-  S[`tree.${k}.1`] = tree(32, k, 1);
+  S[`tree.${k}.0`] = tree(48, k, 0);
+  S[`tree.${k}.1`] = tree(48, k, 1);
   anim(`tree.${k}`, [`tree.${k}.0`, `tree.${k}.1`], 2);
 }
 S['tree.pine.0'] = pine(0);
@@ -284,32 +288,44 @@ S['edge.fence.v'] = fenceV();
 
 // ---------- street props ----------
 function lamp(night) {
-  const g = G(16, 32);
+  const g = G(16, 40);
   if (night) {
-    for (let y = 0; y < 18; y++) for (let x = 0; x < 16; x++) {
-      const d = Math.hypot(x + 0.5 - 8, y - 7);
-      if (d <= 8 && d > 3 && (x + y) % 2 === 0) g.p(x, y, 'a');
+    for (let y = 0; y < 26; y++) for (let x = 0; x < 16; x++) {
+      const d = Math.hypot(x + 0.5 - 8, y - 9);
+      if (d <= 8 && d > 3.5 && (x + y) % 2 === 0) g.p(x, y, 'a');
     }
   }
-  g.r(7, 12, 2, 18, 'O').r(7, 12, 1, 18, 'w').r(8, 12, 1, 18, 'v');
-  g.b(5, 28, 6, 3, 'v');
-  g.b(5, 3, 6, 9, night ? 'a' : 's');
-  g.r(6, 4, 1, 4, night ? 'W' : 'W');
-  g.r(4, 1, 8, 2, 'O').r(5, 2, 6, 1, 'v');
-  g.p(7, 0, 'O').p(8, 0, 'O');
-  if (night) g.r(7, 6, 2, 4, 'b');
+  g.r(7, 16, 2, 22, 'O').r(7, 16, 1, 22, 'w').r(8, 16, 1, 22, 'v');
+  g.b(4, 35, 8, 4, 'v').r(5, 36, 6, 1, 'u');
+  g.b(5, 5, 6, 11, night ? 'a' : 's');
+  g.r(6, 6, 1, 5, 'W');
+  g.r(4, 2, 8, 3, 'O').r(5, 3, 6, 1, 'v');
+  g.p(7, 0, 'O').p(8, 0, 'O').p(7, 1, 'O').p(8, 1, 'O');
+  if (night) g.r(7, 8, 2, 6, 'b').r(7, 9, 2, 3, 'W');
   return g.s();
 }
 S['lamp.day'] = lamp(false);
 S['lamp.night'] = lamp(true);
 (function () {
-  const g = G(32, 16);
-  g.b(3, 3, 26, 5, 'p').r(4, 4, 24, 1, 'o');
-  g.b(3, 8, 26, 3, 'c').r(4, 9, 24, 1, 'b');
-  g.b(4, 11, 3, 4, 'e').b(25, 11, 3, 4, 'e');
-  g.b(2, 1, 2, 7, 'e').b(28, 1, 2, 7, 'e');
-  g.r(4, 4, 24, 1, 'o');
+  const g = G(32, 24);
+  g.e(16, 22, 15, 2, 'h');
+  g.b(3, 3, 26, 3, 'c').r(4, 4, 24, 1, 'b').b(3, 6, 26, 3, 'c').r(4, 7, 24, 1, 'b');
+  g.b(2, 1, 3, 12, 'e').b(27, 1, 3, 12, 'e');
+  g.b(1, 11, 30, 4, 'b').r(2, 12, 28, 1, 'a');
+  g.b(2, 15, 28, 3, 'd');
+  g.b(4, 18, 3, 5, 'e').b(25, 18, 3, 5, 'e');
   S['bench.h'] = g.s();
+})();
+(function () {
+  const g = G(16, 16);
+  g.e(8, 8, 7, 6, 'O').e(8, 8, 6, 5, 'i').e(7, 7, 4, 3, 'h').r(8, 8, 8, 1, '.').r(9, 9, 6, 1, '.');
+  g.p(9, 8, 'O').p(8, 9, 'i');
+  g.p(5, 6, 'g').p(6, 6, 'g');
+  S['lilypad.0'] = g.s();
+  const f = G(16, 16);
+  S['lilypad.0'].rows.forEach((row, y) => [...row].forEach((c, x) => f.p(x, y, c)));
+  f.r(6, 5, 3, 3, 'm').p(7, 4, 'm').p(5, 6, 'n').p(9, 6, 'n').p(7, 8, 'n').p(7, 6, 'a');
+  S['lilypad.1'] = f.s();
 })();
 (function () {
   const g = G(16, 24);
@@ -348,44 +364,58 @@ S['lamp.night'] = lamp(true);
 
 // ---------- big props ----------
 function fountain(f) {
-  const g = G(48, 48);
-  g.e(24, 36, 22, 10, 'O').e(24, 35, 21, 9, 'b').e(24, 35, 18, 7, 'a').e(24, 35, 16, 6, 't');
-  g.e(24, 36, 22, 10, 'O');
-  g.e(24, 35, 21, 9, 'b').e(24, 34, 19, 7, 'a').e(24, 34, 17, 6, 'O').e(24, 34, 16, 5, 't');
-  for (let i = 0; i < 6; i++) g.p(12 + i * 4 + f, 34 + (i % 2), 's');
-  g.r(21, 18, 6, 17, 'O').r(22, 18, 4, 17, 'b').r(22, 18, 1, 17, 'a');
-  g.e(24, 20, 8, 3, 'O').e(24, 19, 7, 2, 'a').e(24, 19, 5, 1, 't');
-  g.r(20, 28, 8, 1, 'O');
-  const jets = [[0, 2], [1, 3], [2, 4]][f];
-  g.r(23, 8 - f, 2, 11 + f, 'O').r(23, 9 - f, 1, 10 + f, 's').r(24, 9 - f, 1, 10 + f, 't');
+  const g = G(64, 64);
+  // lower basin
+  g.e(32, 48, 31, 15, 'O').e(32, 47, 30, 14, 'b').e(32, 46, 30, 13, 'a').e(32, 47, 26, 11, 'O').e(32, 47, 25, 10, 't');
+  g.e(32, 49, 25, 8, 'u').e(32, 47, 25, 10, 't').e(32, 46, 22, 8, 's');
+  for (let i = 0; i < 7; i++) g.p(10 + i * 7 + f * 2, 44 + (i % 3) * 3, 'W');
+  for (let x = 4; x < 60; x += 6) g.p(x, 58 + (x % 2), 'c');
+  // pedestal and upper bowl
+  g.r(28, 26, 8, 20, 'O').r(29, 26, 6, 20, 'b').r(29, 26, 2, 20, 'a');
+  g.e(32, 28, 14, 6, 'O').e(32, 28, 13, 5, 'a').e(32, 27, 11, 4, 'O').e(32, 27, 10, 3, 't').e(32, 27, 7, 2, 's');
+  g.e(32, 33, 12, 3, 'b').e(32, 32, 12, 3, 'a');
+  g.e(32, 28, 14, 6, 'O').e(32, 28, 13, 5, 'a').e(32, 27, 11, 4, 'O').e(32, 27, 10, 3, 't').e(32, 27, 7, 2, 's');
+  // spout and arcs
+  g.r(31, 10 - f, 2, 17 + f, 'O').r(31, 11 - f, 1, 16 + f, 's').r(32, 11 - f, 1, 16 + f, 't');
+  g.p(31, 8 - f, 's').p(32, 8 - f, 'W').p(31, 9 - f, 'W');
+  const amp = 5 + f;
   [-1, 1].forEach((d) => {
-    for (let i = 0; i < 8; i++) {
-      const x = 24 + d * (2 + i), y = 12 + f - Math.round(Math.sin((i / 8) * Math.PI) * (4 + jets[0])) + Math.floor(i / 3) * 3;
-      g.p(x + (d < 0 ? -1 : 0), y, 's').p(x + (d < 0 ? -1 : 0), y + 1, 't');
+    for (let i = 0; i < 12; i++) {
+      const x = 32 + d * (2 + i);
+      const y = 18 - Math.round(Math.sin((i / 12) * Math.PI * 0.9) * amp) + Math.floor(i * i / 24) + 4;
+      g.p(d < 0 ? x - 1 : x, y, 's').p(d < 0 ? x - 1 : x, y + 1, 't');
     }
   });
-  g.p(23, 6 - f, 's').p(24, 6 - f, 's');
+  [-1, 1].forEach((d) => { g.p(32 + d * (15 + f), 29, 'W').p(32 + d * (14 + f), 30, 's'); });
+  g.p(24 + f * 2, 40, 'W').p(40 - f * 2, 42, 'W');
   return g.s();
 }
 for (let f = 0; f < 3; f++) S[`fountain.${f}`] = fountain(f);
 anim('fountain', ['fountain.0', 'fountain.1', 'fountain.2'], 4);
 (function () {
-  const g = G(48, 32);
-  g.b(0, 6, 48, 12, 'b');
-  for (let x = 2; x < 46; x += 6) g.r(x, 7, 4, 1, 'a');
-  g.r(0, 6, 48, 1, 'O');
-  g.r(0, 8, 48, 1, 'O');
-  g.r(1, 7, 46, 1, 'a');
-  g.b(0, 18, 48, 14, 'b');
-  for (let y = 21; y < 30; y += 4) for (let x = 0; x < 48; x += 6) g.p(x + ((y / 4) % 2) * 3, y, 'c');
-  g.e(24, 32, 14, 11, 'O').e(24, 32, 12, 9, '.');
-  // arch ring
-  for (let a = 0; a < 40; a++) {
-    const t = Math.PI + (a / 39) * Math.PI;
-    g.p(Math.round(24 + Math.cos(t) * 13), Math.round(32 + Math.sin(t) * 10), 'd');
+  const g = G(64, 48);
+  // back parapet
+  g.b(0, 4, 64, 8, 'a').r(1, 5, 62, 1, 'W');
+  for (let x = 4; x < 64; x += 8) g.p(x, 8, 'b').p(x + 1, 8, 'b');
+  // deck
+  g.r(0, 12, 64, 12, 'b');
+  for (let y = 13; y < 24; y += 4) for (let x = 0; x < 64; x += 8) g.r(x + ((y / 4) % 2) * 4, y, 1, 3, 'c');
+  g.r(0, 12, 64, 1, 'O');
+  // front parapet
+  g.b(0, 22, 64, 10, 'a').r(1, 23, 62, 1, 'W');
+  for (let x = 3; x < 64; x += 8) g.p(x, 27, 'b').p(x + 1, 27, 'b').p(x + 4, 29, 'b');
+  // arch face
+  g.b(2, 31, 60, 17, 'b');
+  for (let y = 34; y < 47; y += 4) for (let x = 0; x < 64; x += 7) g.p(x + ((y / 4) % 2) * 3, y, 'c');
+  g.e(32, 48, 17, 13, 'O').e(32, 48, 15, 11, '.');
+  for (let a = 0; a < 50; a++) {
+    const t = Math.PI + (a / 49) * Math.PI;
+    g.p(Math.round(32 + Math.cos(t) * 16.5), Math.round(47 + Math.sin(t) * 12.5), 'd');
   }
-  g.r(10, 32, 28, 1, '.');
-  g.r(0, 18, 1, 14, 'O').r(47, 18, 1, 14, 'O');
+  for (let a = 0; a < 20; a++) g.p(Math.round(32 + Math.cos(Math.PI + a / 19 * Math.PI) * 15), Math.round(47 + Math.sin(Math.PI + a / 19 * Math.PI) * 11), 'c');
+  g.r(2, 47, 60, 1, '.');
+  g.e(32, 48, 15, 11, '.');
+  g.r(2, 36, 2, 12, 'c').r(60, 36, 2, 12, 'c');
   S['bridge.stone'] = g.s();
 })();
 (function () {
@@ -448,86 +478,140 @@ for (const k of ['walk', 'swim']) {
 }
 
 // ---------- landmarks ----------
-function shop(name, o, night) {
-  const g = G(64, 56);
-  const [wall, wallD] = o.wall;
-  g.b(2, 14, 60, 41, wall);
-  for (let y = 16; y < 54; y += 4) g.r(3, y, 58, 1, wallD);
-  g.b(0, 8, 64, 6, o.roof);
-  g.r(1, 9, 62, 1, o.roofL);
-  // sign area left blank wall at y 15..21
-  g.r(10, 15, 44, 8, wall);
-  g.r(10, 15, 44, 1, 'O').r(10, 22, 44, 1, 'O').r(10, 15, 1, 8, 'O').r(53, 15, 1, 8, 'O');
-  // awning
-  for (let x = 2; x < 62; x += 4) {
-    const c = o.stripe ? (((x - 2) / 4) % 2 ? 'W' : o.awn) : o.awn;
-    g.r(x, 24, 4, 5, c).r(x, 29, 4, 1, c).r(x + 1, 29, 2, 1, c);
-    g.p(x, 29, 'O').p(x + 3, 29, 'O').p(x + 1, 30, 'O').p(x + 2, 30, 'O');
+const FONT = {
+  C: ['.XX', 'X..', 'X..', 'X..', '.XX'], A: ['.X.', 'X.X', 'XXX', 'X.X', 'X.X'],
+  F: ['XXX', 'X..', 'XX.', 'X..', 'X..'], E: ['XXX', 'X..', 'XX.', 'X..', 'XXX'],
+};
+function text(g, x, y, str, c) {
+  [...str].forEach((ch, k) => FONT[ch].forEach((row, j) => [...row].forEach((v, i) => { if (v === 'X') g.p(x + k * 4 + i, y + j, c); })));
+}
+function roofShape(g, top, hh, x0t, x1t, x0b, x1b, o) {
+  for (let j = 0; j < hh; j++) {
+    const t = j / (hh - 1);
+    const xa = Math.round(x0t + (x0b - x0t) * t), xb = Math.round(x1t + (x1b - x1t) * t);
+    const band = Math.floor(j / 4) % 2;
+    for (let x = xa; x < xb; x++) {
+      let c = band ? o.main : o.light;
+      if (j % 4 === 3) c = o.dark;
+      else if (j % 4 === 0 && band === 0) c = o.light;
+      if (((x - xa) + (Math.floor(j / 4) % 2) * 3) % 6 === 0 && j % 4 !== 3) c = o.dark;
+      g.p(x, top + j, c);
+    }
+    g.p(xa - 1, top + j, 'O').p(xb, top + j, 'O');
   }
-  g.r(2, 23, 60, 1, 'O').r(2, 24, 1, 6, 'O').r(61, 24, 1, 6, 'O');
+  g.r(x0t, top - 1, x1t - x0t, 1, 'O');
+  g.r(x0b - 2, top + hh, x1b - x0b + 4, 1, 'O');
+  g.r(x0b - 1, top + hh - 1, x1b - x0b + 2, 1, 'O');
+  g.r(x0b, top + hh, x1b - x0b, 3, o.dark).r(x0b - 2, top + hh + 3, x1b - x0b + 4, 1, 'O');
+}
+const ROOFS = {
+  boutique: { main: 'p', light: 'n', dark: 'q' }, homestore: { main: 'u', light: 't', dark: 'v' },
+  bakery: { main: 'o', light: 'n', dark: 'p' }, library: { main: 'r', light: 'q', dark: 'w' },
+};
+const WALLS = { boutique: ['m', 'n'], homestore: ['a', 'b'], bakery: ['a', 'b'], library: ['s', 't'] };
+function winBox(g, x, y, w, h, night, curtain) {
+  g.r(x, y, w, h, 'O').r(x + 1, y + 1, w - 2, h - 2, 'e');
+  g.r(x + 2, y + 2, w - 4, h - 4, night ? 'a' : 's');
+  if (night) g.r(x + 2, y + 2 + ((h - 4) >> 1), w - 4, (h - 4) - ((h - 4) >> 1), 'b').r(x + 3, y + 3, 3, 2, 'W');
+  else g.r(x + 3, y + 3, 3, 1, 'W').p(x + 3, y + 4, 'W');
+  g.r(x + (w >> 1), y + 2, 1, h - 4, 'e');
+  g.r(x + 2, y + (h >> 1), w - 4, 1, 'e');
+  g.r(x + 2, y + 2, w - 4, 2, curtain);
+  g.r(x - 1, y + h, w + 2, 2, 'O').r(x, y + h, w, 1, 'd');
+  g.r(x + 2, y + h - 1, 3, 1, 'n').p(x + 3, y + h - 2, 'o');
+}
+function shop(name, night) {
+  const g = G(80, 96);
+  const [wall, wallD] = WALLS[name];
+  // wall (front)
+  g.b(2, 40, 76, 55, wall);
+  for (let y = 44; y < 94; y += 5) g.r(3, y, 74, 1, wallD);
+  for (let y = 44, k = 0; y < 94; y += 5, k++) for (let x = (k % 2) * 6 + 4; x < 76; x += 12) g.r(x, y + 1, 1, 4, wallD);
+  g.r(2, 90, 76, 5, wallD).r(2, 90, 76, 1, 'O');
+  // chimney
+  g.b(54, 0, 9, 14, 'd').r(55, 1, 7, 1, 'c').r(53, 0, 11, 1, 'O');
+  roofShape(g, 6, 34, 14, 66, 0, 80, ROOFS[name]);
+  g.r(0, 38, 80, 1, 'O');
+  // sign plank
+  const sx = 24, sy = 54, sw = 32, sh = 11;
+  g.r(sx + 3, sy - 4, 1, 4, 'O').r(sx + sw - 4, sy - 4, 1, 4, 'O');
+  g.b(sx, sy, sw, sh, 'c').r(sx + 1, sy + 1, sw - 2, 1, 'b');
+  g.p(sx + 2, sy + 2, 'e').p(sx + sw - 3, sy + 2, 'e');
+  const ic = 'f';
+  if (name === 'bakery') text(g, sx + 8, sy + 3, 'CAFE', ic);
+  else if (name === 'boutique') { g.r(sx + 11, sy + 3, 3, 2, 'p').r(sx + 17, sy + 3, 3, 2, 'p').r(sx + 10, sy + 5, 11, 2, 'p').r(sx + 12, sy + 7, 7, 1, 'p').r(sx + 14, sy + 8, 3, 1, 'p'); g.p(sx + 12, sy + 3, 'm'); }
+  else if (name === 'homestore') { g.r(sx + 12, sy + 6, 8, 3, 'u').r(sx + 13, sy + 4, 6, 2, 'u').r(sx + 14, sy + 3, 4, 1, 'u').r(sx + 15, sy + 7, 2, 2, 'a'); }
+  else { g.r(sx + 9, sy + 3, 6, 6, 'r').r(sx + 16, sy + 3, 6, 6, 'q').r(sx + 15, sy + 3, 1, 6, 'f').r(sx + 10, sy + 4, 4, 1, 'm').r(sx + 17, sy + 4, 4, 1, 'm'); }
   // windows
-  const win = night ? 'a' : 's';
-  g.b(6, 31, 20, 18, 'e').r(7, 32, 18, 16, win).r(7, 32, 18, 1, night ? 'W' : 'W');
-  g.b(38, 31, 20, 18, 'e').r(39, 32, 18, 16, win).r(39, 32, 18, 1, 'W');
-  if (night) { g.r(7, 40, 18, 8, 'b').r(39, 40, 18, 8, 'b'); }
-  g.r(7, 47, 18, 1, 'd').r(39, 47, 18, 1, 'd');
-  o.left(g, 7, 32);
-  o.right(g, 39, 32);
-  // door bottom centre
-  g.b(27, 35, 10, 20, 'e').r(28, 36, 8, 18, 'd').p(34, 46, 'a').r(29, 37, 6, 5, night ? 'a' : 's');
-  g.r(26, 54, 12, 1, 'O');
+  const cur = name === 'bakery' ? 'o' : name === 'library' ? 'u' : 'n';
+  winBox(g, 8, 52, 18, 24, night, cur);
+  winBox(g, 54, 52, 18, 24, night, cur);
+  // door: column 2 of bottom footprint row => x 32..47
+  g.b(33, 69, 14, 26, 'e').r(34, 70, 12, 25, 'd').r(34, 70, 2, 25, 'c');
+  g.r(35, 72, 10, 8, night ? 'a' : 's').r(35, 72, 10, 1, 'W').r(39, 72, 1, 8, 'e').r(35, 76, 10, 1, 'e');
+  g.r(35, 83, 10, 1, 'e').p(43, 88, 'a').p(43, 89, 'b');
+  g.r(31, 94, 18, 2, 'O').r(32, 94, 16, 1, 'b');
+  // awning
+  if (name === 'bakery') {
+    for (let x = 4; x < 76; x += 4) {
+      const c = ((x - 4) / 4) % 2 ? 'W' : 'o';
+      g.r(x, 45, 4, 6, c).r(x + 1, 51, 2, 1, c);
+      g.p(x, 51, 'O').p(x + 3, 51, 'O').p(x + 1, 52, 'O').p(x + 2, 52, 'O');
+    }
+    g.r(4, 44, 72, 1, 'O').r(4, 45, 1, 6, 'O').r(75, 45, 1, 6, 'O');
+    g.r(2, 47, 2, 1, 'O');
+  }
+  if (name === 'library') for (const x of [3, 73]) g.r(x, 44, 4, 50, 'W').r(x + 3, 44, 1, 50, 'a').r(x - 1, 44, 1, 50, 'O').r(x + 4, 44, 1, 50, 'O');
+  if (name === 'boutique') { g.e(14, 92, 5, 2, 'h').p(12, 90, 'n').p(15, 89, 'm').p(17, 91, 'n').e(66, 92, 5, 2, 'h').p(64, 90, 'm').p(67, 89, 'n').p(69, 91, 'm'); }
+  if (name === 'homestore') { g.r(10, 88, 6, 5, 'o').r(10, 88, 6, 1, 'p').e(13, 86, 3, 3, 'i').r(64, 88, 6, 5, 'o').e(67, 86, 3, 3, 'h'); }
   return g.s();
 }
-const dress = (g, x, y) => { g.r(x + 8, y + 3, 3, 2, 'p'); g.r(x + 7, y + 5, 5, 3, 'n'); g.r(x + 6, y + 8, 7, 4, 'n').r(x + 5, y + 12, 9, 2, 'm').p(x + 9, y + 5, 'm'); g.r(x + 9, y + 14, 1, 1, 'O'); };
-const hat = (g, x, y) => { g.r(x + 4, y + 8, 6, 3, 'q').r(x + 3, y + 11, 8, 1, 'r').r(x + 3, y + 15, 12, 1, 'e'); g.r(x + 13, y + 11, 3, 5, 'n'); };
-const lampc = (g, x, y) => { g.r(x + 3, y + 3, 6, 4, 'a').r(x + 5, y + 7, 2, 6, 'd').r(x + 3, y + 13, 6, 2, 'd').r(x + 2, y + 2, 8, 1, 'O'); };
-const chair = (g, x, y) => { g.r(x + 11, y + 6, 2, 9, 'e').r(x + 11, y + 6, 6, 2, 'e').r(x + 12, y + 11, 6, 2, 'c').r(x + 17, y + 13, 1, 3, 'e').r(x + 12, y + 13, 1, 3, 'e'); };
-const cake = (g, x, y) => { g.r(x + 4, y + 9, 10, 5, 'a').r(x + 4, y + 9, 10, 2, 'm').r(x + 5, y + 6, 8, 3, 'n').r(x + 5, y + 6, 8, 1, 'W').p(x + 9, y + 4, 'o').p(x + 9, y + 3, 'a').r(x + 3, y + 14, 12, 1, 'd'); };
-const buns = (g, x, y) => { g.e(x + 6, y + 12, 4, 2, 'c').e(x + 13, y + 12, 3, 2, 'b').r(x + 5, y + 14, 12, 1, 'd'); };
-const books = (g, x, y) => { ['o', 'u', 'h', 'q', 'n', 'c'].forEach((c, i) => g.r(x + 2 + i * 3, y + 4 + (i % 2) * 2, 2, 11 - (i % 2) * 2, c)); g.r(x + 1, y + 15, 16, 1, 'd'); };
-const stack = (g, x, y) => { g.r(x + 3, y + 11, 11, 2, 'o').r(x + 4, y + 9, 9, 2, 'u').r(x + 3, y + 7, 10, 2, 'h').r(x + 5, y + 5, 6, 2, 'q'); };
-const plants = (g, x, y) => { g.r(x + 4, y + 10, 5, 5, 'o').e(x + 6, y + 8, 3, 3, 'h').r(x + 12, y + 12, 4, 3, 'c').e(x + 14, y + 10, 2, 3, 'i'); };
-const nothing = () => {};
-
-const SHOPS = {
-  boutique: { wall: ['m', 'n'], roof: 'q', roofL: 'r', awn: 'n', left: dress, right: hat },
-  homestore: { wall: ['a', 'b'], roof: 'j', roofL: 'i', awn: 'h', left: lampc, right: chair },
-  bakery: { wall: ['a', 'b'], roof: 'e', roofL: 'd', awn: 'o', stripe: true, left: cake, right: buns },
-  library: { wall: ['s', 't'], roof: 'w', roofL: 'v', awn: 'u', left: books, right: stack },
-};
-for (const k of Object.keys(SHOPS)) {
-  S[`landmark.${k}`] = shop(k, SHOPS[k], false);
-  S[`landmark.${k}.night`] = shop(k, SHOPS[k], true);
+for (const k of Object.keys(ROOFS)) {
+  S[`landmark.${k}`] = shop(k, false);
+  S[`landmark.${k}.night`] = shop(k, true);
 }
-(function () {
-  // library: add columns over the facade
-  for (const id of ['landmark.library', 'landmark.library.night']) {
-    const g = G(64, 56);
-    S[id].rows.forEach((r, y) => [...r].forEach((c, x) => g.p(x, y, c)));
-    for (const x of [1, 3, 59, 61]) g.r(x, 30, 2, 25, 'W').r(x + 1, 30, 1, 25, 'a');
-    g.r(0, 54, 6, 2, 'O').r(58, 54, 6, 2, 'O').r(0, 29, 6, 1, 'O').r(58, 29, 6, 1, 'O');
-    // pediment
-    for (let j = 0; j < 7; j++) g.r(22 + j, 7 - j, 20 - j * 2, 1, 'W').p(22 + j, 7 - j, 'O').p(41 - j, 7 - j, 'O');
-    S[id] = g.s();
-  }
-})();
 function hall(night) {
-  const g = G(64, 64);
-  g.b(2, 28, 60, 35, 'a');
-  for (let y = 31; y < 62; y += 4) g.r(3, y, 58, 1, 'b');
-  g.b(0, 22, 64, 6, 'p').r(1, 23, 62, 1, 'n');
-  // tower
-  g.b(22, 6, 20, 24, 'b').r(23, 7, 18, 1, 'a');
-  g.b(24, 10, 16, 16, 'W').e(32, 18, 6, 6, 'O').e(32, 18, 5, 5, 'W');
-  g.r(32, 14, 1, 5, 'O').r(32, 18, 4, 1, 'O');
-  for (let j = 0; j < 8; j++) g.r(31 - j * 1, 5 - Math.floor(j * 0.6), 2 + j * 2, 1, j % 3 === 2 ? 'o' : 'p');
-  g.r(30, 0, 4, 1, 'O');
-  g.r(32, 0, 1, 1, 'a');
+  const g = G(112, 112);
+  // wall
+  g.b(2, 62, 108, 49, 'a');
+  for (let y = 66; y < 108; y += 5) g.r(3, y, 106, 1, 'b');
+  for (let y = 66, k = 0; y < 108; y += 5, k++) for (let x = (k % 2) * 7 + 5; x < 108; x += 14) g.r(x, y + 1, 1, 4, 'b');
+  g.r(2, 106, 108, 5, 'b').r(2, 106, 108, 1, 'O');
+  // roof
+  roofShape(g, 32, 28, 22, 90, 0, 112, { main: 'r', light: 'q', dark: 'w' });
+  // tower body
+  g.b(38, 18, 36, 46, 'a');
+  for (let y = 22; y < 62; y += 5) g.r(39, y, 34, 1, 'b');
+  g.r(36, 62, 40, 2, 'O').r(37, 62, 38, 1, 'b');
+  // clock
+  g.e(56, 34, 12, 12, 'O').e(56, 34, 11, 11, 'e').e(56, 34, 9, 9, 'W');
+  g.r(56, 28, 1, 7, 'O').r(56, 34, 5, 1, 'O');
+  for (const [x, y] of [[56, 26], [56, 42], [48, 34], [64, 34]]) g.p(x, y, 'o');
+  // tower roof
+  for (let j = 0; j < 18; j++) {
+    const half = 3 + Math.round((j / 17) * 22);
+    const c = j % 4 === 3 ? 'w' : j % 6 < 3 ? 'q' : 'r';
+    g.r(56 - half, 2 + j, half * 2, 1, c).p(56 - half - 1, 2 + j, 'O').p(56 + half, 2 + j, 'O');
+  }
+  g.r(30, 20, 52, 1, 'O').r(32, 19, 48, 1, 'w');
+  g.r(55, 0, 2, 4, 'O').r(57, 1, 5, 3, 'o').p(57, 1, 'n');
   // windows
-  const win = night ? 'a' : 's';
-  for (const x of [8, 18, 40, 50]) g.b(x, 34, 6, 12, 'e').r(x + 1, 35, 4, 10, win);
-  g.b(27, 40, 10, 24, 'e').r(28, 41, 8, 22, 'd').r(29, 42, 6, 6, win).p(34, 52, 'a');
-  g.r(26, 63, 12, 1, 'O');
+  for (const x of [8, 22, 82, 96]) {
+    g.r(x, 72, 10, 18, 'O').r(x + 1, 73, 8, 16, 'e').r(x + 2, 74, 6, 14, night ? 'a' : 's');
+    if (night) g.r(x + 2, 81, 6, 7, 'b');
+    g.r(x + 4, 74, 1, 14, 'e').r(x + 2, 80, 6, 1, 'e').r(x - 1, 90, 12, 2, 'O').r(x, 90, 10, 1, 'd');
+    g.r(x + 2, 74, 6, 2, 'p');
+  }
+  for (const x of [46, 62]) { g.r(x, 70, 4, 8, 'O').r(x + 1, 71, 2, 6, night ? 'a' : 's'); }
+  // door: column 3 of bottom row => x 48..63
+  g.r(49, 86, 14, 25, 'O').r(50, 87, 12, 24, 'e').r(51, 88, 10, 23, 'd').r(51, 88, 2, 23, 'c');
+  g.r(55, 88, 1, 23, 'e').r(51, 92, 10, 1, 'e').p(58, 100, 'a').p(53, 100, 'a');
+  g.r(52, 84, 8, 2, 'O').r(53, 83, 6, 1, 'O');
+  g.r(53, 85, 6, 1, night ? 'a' : 's');
+  g.r(44, 109, 24, 3, 'O').r(45, 110, 22, 1, 'b');
+  // planters
+  g.e(36, 108, 6, 3, 'h').p(34, 105, 'n').p(37, 104, 'm').p(39, 106, 'n');
+  g.e(76, 108, 6, 3, 'h').p(74, 105, 'm').p(77, 104, 'n').p(79, 106, 'm');
   return g.s();
 }
 S['landmark.townhall'] = hall(false);
