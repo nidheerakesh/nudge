@@ -15,10 +15,10 @@ const C = {
 }
 
 // Districts laid out along spiral(i); claimed plots drawn as dots; hitTest maps canvas px to a district index.
-export function createMinimap({ canvas, count = 1, current = 0, claimed = null, onPick = null } = {}) {
+export function createMinimap({ canvas, count = 1, current = 0, claimed = null, onPick = null, layout = null } = {}) {
   const m = { count, current, player: null }
   let claims = claimed || {}
-  const tpl = districtTemplate()
+  let tpl = layout || districtTemplate()
 
   function bounds(n) {
     let x0 = 0, x1 = 0, y0 = 0, y1 = 0
@@ -53,6 +53,7 @@ export function createMinimap({ canvas, count = 1, current = 0, claimed = null, 
   m.setCurrent = i => { m.current = i }
   m.setClaimed = c => { claims = c || {} }
   m.setPlayer = p => { m.player = p || null }
+  m.setLayout = t => { tpl = t || districtTemplate() }
 
   // claimed: { [districtIndex]: [slot, ...] }
   m.hitTest = (x, y) => {

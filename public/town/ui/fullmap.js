@@ -1,13 +1,14 @@
-import { districtTemplate, W, H } from '/town/shared/plots.js';
+import { W, H } from '/town/shared/plots.js';
 
 const S = 8;
+const OSM = 'https://www.openstreetmap.org/copyright';
 const GROUND = { 0: '#5E9E44', 1: '#68A94C', 2: '#54903C', 3: '#C9A27A', 4: '#D79A63', 5: '#E8D2A8', 6: '#4C8FD6', 7: '#B9C48A', 8: '#8FAE66', 9: '#9B6B3F', 10: '#9B6B3F' };
 const NAMES = { boutique: 'Boutique', homestore: 'Home Store', bakery: 'Bakery', library: 'Library', townhall: 'Town Hall' };
 const hit = (r, x, y) => x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
 
 export function openFullMap(ctx) {
   const { h } = ctx.ui;
-  const tpl = districtTemplate();
+  let tpl = null;
   const mine = () => (ctx.me && ctx.me.plot) || { district: 0, slot: -1 };
   let d = mine().district;
   let top = d;
@@ -17,16 +18,27 @@ export function openFullMap(ctx) {
 
   const cv = h('canvas', { width: String(W * S), height: String(H * S), role: 'img', 'aria-label': 'Full town map. Tap a plot to see it.', style: { width: '100%', display: 'block', imageRendering: 'pixelated', touchAction: 'manipulation', border: 'var(--lw, 2px) solid var(--ink)', borderRadius: '8px' } });
   const title = h('strong', { role: 'status', 'aria-live': 'polite' });
+  const pname = h('span', null);
+  const credit = h('a', { href: OSM, target: '_blank', rel: 'noopener' }, '© OpenStreetMap contributors');
+  const where = h('div', { class: 'small', hidden: true }, pname, ' ', credit);
   const note = h('div', { class: 'col', role: 'status', 'aria-live': 'polite', style: { minHeight: '64px' } });
   const prev = h('button', { class: 'k-btn', type: 'button', style: { minHeight: '44px' }, onclick: () => go(d - 1) }, 'Prev');
   const next = h('button', { class: 'k-btn', type: 'button', style: { minHeight: '44px' }, onclick: () => go(d + 1) }, 'Next');
 
   function draw() {
+    if (!tpl) return;
     const g = cv.getContext('2d');
     g.imageSmoothingEnabled = false;
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       g.fillStyle = GROUND[tpl.ground[y][x]] || GROUND[0];
       g.fillRect(x * S, y * S, S, S);
+    }
+    for (const r of tpl.real || []) {
+      g.fillStyle = '#C9B79A';
+      g.fillRect(r.x * S, r.y * S, r.w * S, r.h * S);
+      g.strokeStyle = '#2A1F2D';
+      g.lineWidth = 1;
+      g.strokeRect(r.x * S, r.y * S, r.w * S, r.h * S);
     }
     for (const t of tpl.decor) {
       if (t.kind !== 'tree') continue;
@@ -68,9 +80,15 @@ export function openFullMap(ctx) {
   }
 
   async function load() {
+    const want = d;
     title.textContent = 'District ' + (d + 1);
     prev.disabled = d <= 0;
     next.disabled = d + 1 > top + 1;
+    const lay = await ctx.layouts.load(want);
+    if (want !== d) return;
+    tpl = lay.tpl;
+    pname.textContent = lay.place ? lay.place.display : '';
+    where.hidden = !lay.place;
     info = { taken: [], owners: new Map() };
     try {
       const r = await ctx.get('/plots?district=' + d);
@@ -128,6 +146,7 @@ export function openFullMap(ctx) {
   }
 
   cv.addEventListener('pointerdown', (e) => {
+    if (!tpl) return;
     const r = cv.getBoundingClientRect();
     const x = ((e.clientX - r.left) / r.width) * W;
     const y = ((e.clientY - r.top) / r.height) * H;
@@ -139,6 +158,7 @@ export function openFullMap(ctx) {
 
   const body = h('div', { class: 'col', style: { gap: '8px' } },
     h('div', { class: 'row', style: { justifyContent: 'space-between', alignItems: 'center' } }, prev, title, next),
+    where,
     cv, note);
   const box = ctx.ui.sheet('Town map', h('div', { class: 'k-panel col', style: { padding: '12px' } }, body));
   load();
