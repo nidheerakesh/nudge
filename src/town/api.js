@@ -1,6 +1,9 @@
 import { byId, SKIN, HAIR_STYLES, HAIR_COLORS } from '../../public/town/shared/catalog.js';
 import { nextSlot, plotWorld, PLOTS } from '../../public/town/shared/plots.js';
+import { RPLOTS } from '../../public/town/shared/layout.js';
 import { balance, buy, buyFood, eat, owns, ownedSet } from './coins.js';
+import { searchPlaces, ensurePlace, districtFor, freeSlot, districtInfo } from './places.js';
+import { social, chatMuted } from './social.js';
 
 const SIZES = { 'house:hut': [6, 5], 'house:small': [8, 6], 'house:medium': [10, 7], 'house:large': [12, 8], 'house:manor': [14, 9] };
 const MAXITEMS = 40;
@@ -53,6 +56,8 @@ async function join(db, uid, uname) {
   for (let i = 0; i < 3 && !p; i++) {
     const { results } = await db.prepare('SELECT district, slot FROM town_plots WHERE user_id IS NOT NULL').all();
     const taken = new Set(results.map((r) => r.district + ':' + r.slot));
+    const dd = (await db.prepare('SELECT n FROM districts').all()).results;
+    for (const r of dd) for (let s = 0; s < PLOTS; s++) taken.add(r.n + ':' + s);
     const { district, slot } = nextSlot(taken);
     try {
       const up = await db.prepare('UPDATE town_plots SET user_id=? WHERE district=? AND slot=? AND user_id IS NULL').bind(uid, district, slot).run();
@@ -240,7 +245,9 @@ async function movePlot(db, uid, body) {
   const cur = await needJoin(db, uid);
   if (cur.district === d && cur.slot === s) return { plot: { district: d, slot: s, world: plotWorld(d, s) } };
   const top = await db.prepare('SELECT COALESCE(MAX(district),0) AS m FROM town_plots WHERE user_id IS NOT NULL').first('m');
-  if (d > Number(top) + 1) throw fail(400, 'plot');
+  const real = await db.prepare('SELECT 1 AS x FROM districts WHERE n=?').bind(d).first();
+  if (d > Number(top) + 1 && !real) throw fail(400, 'plot');
+  if (real && s >= RPLOTS) throw fail(400, 'plot');
   await db.prepare('INSERT OR IGNORE INTO town_plots(district,slot,user_id) VALUES(?,?,NULL)').bind(d, s).run();
   await db.prepare('UPDATE town_plots SET user_id=NULL WHERE id=? AND user_id=?').bind(cur.id, uid).run();
   const up = await db.prepare('UPDATE town_plots SET user_id=? WHERE district=? AND slot=? AND user_id IS NULL').bind(uid, d, s).run();
@@ -251,6 +258,36 @@ async function movePlot(db, uid, body) {
   const now = await joined(db, uid);
   await db.prepare('UPDATE houses SET plot_id=? WHERE user_id=?').bind(now.id, uid).run();
   return { plot: { district: d, slot: s, world: plotWorld(d, s) } };
+}
+
+async function toPlace(db, f, uid, body) {
+  const cur = await needJoin(db, uid);
+  const hit = (await searchPlaces(db, body && body.q, f)).find((h) => h.osm === (body && body.osm));
+  if (!hit) throw fail(400, 'place');
+  const pl = await ensurePlace(db, hit, f);
+  const here = await db.prepare('SELECT 1 AS x FROM districts WHERE n=? AND place_id=?').bind(cur.district, pl.id).first();
+  let r = { plot: { district: cur.district, slot: cur.slot, world: plotWorld(cur.district, cur.slot) } };
+  if (!here) {
+    const d = await districtFor(db, pl.id);
+    r = await movePlot(db, uid, { district: d, slot: await freeSlot(db, d) });
+  }
+  return { ...r, place: { name: pl.name, display: pl.display } };
+}
+
+async function roomCount(env, d, n) {
+  try {
+    const r = await env.HOUSE.get(env.HOUSE.idFromName('room:' + d + ':' + n)).fetch('https://do/count');
+    const j = await r.json();
+    return { cnt: j.n, phase: j.phase, end: j.end };
+  } catch {
+    return { cnt: 0, phase: 'idle', end: 0 };
+  }
+}
+
+async function rooms(env, d) {
+  const out = [];
+  for (let n = 1; n <= 6; n++) out.push({ n, ...(await roomCount(env, d, n)) });
+  return { rooms: out };
 }
 
 const secs = (t) => (t > 1e12 ? t / 1000 : t);
@@ -302,6 +339,10 @@ async function report(db, uid, body) {
   return { ok: 1 };
 }
 
+async function mutedH(db, uid) {
+  return (await chatMuted(db, uid)) ? { 'x-muted': '1' } : {};
+}
+
 function wsReq(request, uid, nm, extra = {}) {
   const h = new Headers();
   for (const [k, v] of request.headers) if (!k.toLowerCase().startsWith('x-')) h.set(k, v);
@@ -323,7 +364,7 @@ async function wsDistrict(env, request, u, url) {
   if (!(await joined(env.DB, u.id))) return json({ error: 'join' }, 403);
   if ((await pref(env.DB, u.id, 'show_in_town')) === '0') return json({ error: 'hidden' }, 403);
   const stub = env.DISTRICT.get(env.DISTRICT.idFromName('d:' + d));
-  return stub.fetch(wsReq(request, u.id, await dname(env.DB, u.id), { 'x-district': String(d) }));
+  return stub.fetch(wsReq(request, u.id, await dname(env.DB, u.id), { 'x-district': String(d), ...(await mutedH(env.DB, u.id)) }));
 }
 
 async function wsHall(env, request, u, url) {
@@ -333,7 +374,18 @@ async function wsHall(env, request, u, url) {
   if (!(await joined(env.DB, u.id))) return json({ error: 'join' }, 403);
   if ((await pref(env.DB, u.id, 'show_in_town')) === '0') return json({ error: 'hidden' }, 403);
   const stub = env.HOUSE.get(env.HOUSE.idFromName('hall:' + d));
-  return stub.fetch(wsReq(request, u.id, await dname(env.DB, u.id), { 'x-hall': '1' }));
+  return stub.fetch(wsReq(request, u.id, await dname(env.DB, u.id), { 'x-hall': '1', ...(await mutedH(env.DB, u.id)) }));
+}
+
+async function wsRoom(env, request, u, url, n) {
+  if ((request.headers.get('upgrade') || '').toLowerCase() !== 'websocket') return json({ error: 'upgrade' }, 426);
+  const d = uid_(url.searchParams.get('district') ?? '');
+  if (d === null || d > 100000) return json({ error: 'district' }, 400);
+  if (n === null || n < 1 || n > 6) return json({ error: 'room' }, 400);
+  if (!(await joined(env.DB, u.id))) return json({ error: 'join' }, 403);
+  if ((await pref(env.DB, u.id, 'show_in_town')) === '0') return json({ error: 'hidden' }, 403);
+  const stub = env.HOUSE.get(env.HOUSE.idFromName('room:' + d + ':' + n));
+  return stub.fetch(wsReq(request, u.id, await dname(env.DB, u.id), { 'x-room': '1', ...(await mutedH(env.DB, u.id)) }));
 }
 
 async function wsHouse(env, request, u, owner) {
@@ -351,7 +403,7 @@ async function wsHouse(env, request, u, owner) {
     if (!ok) return json({ error: 'forbidden' }, 403);
   }
   const stub = env.HOUSE.get(env.HOUSE.idFromName('h:' + owner));
-  return stub.fetch(wsReq(request, u.id, await dname(db, u.id), owner === u.id ? { 'x-owner': '1' } : {}));
+  return stub.fetch(wsReq(request, u.id, await dname(db, u.id), { ...(owner === u.id ? { 'x-owner': '1' } : {}), ...(await mutedH(db, u.id)) }));
 }
 
 async function inner(env, request, u, path, body) {
@@ -361,8 +413,10 @@ async function inner(env, request, u, path, body) {
   const p = path.split('/').slice(3);
   const [a, b, c] = p;
   const uid = u.id;
+  const f = env.FETCHER || fetch;
   if (a === 'ws' && p.length === 1 && m === 'GET') return wsDistrict(env, request, u, url);
   if (a === 'hall' && b === 'ws' && p.length === 2 && m === 'GET') return wsHall(env, request, u, url);
+  if (a === 'room' && c === 'ws' && p.length === 3 && m === 'GET') return wsRoom(env, request, u, url, uid_(b));
   if (a === 'house' && c === 'ws' && p.length === 3 && m === 'GET') {
     const o = uid_(b);
     return o === null ? json({ error: 'user' }, 400) : wsHouse(env, request, u, o);
@@ -409,6 +463,21 @@ async function inner(env, request, u, path, body) {
     return json(await plots(db, uid, d));
   }
   if (a === 'plot' && p.length === 1 && m === 'POST') return json(await movePlot(db, uid, body));
+  if (a === 'places' && p.length === 1 && m === 'GET') {
+    const r = await searchPlaces(db, url.searchParams.get('q') ?? '', f);
+    return json({ places: r.map(({ osm, name, display }) => ({ osm, name, display })) });
+  }
+  if (a === 'place' && p.length === 1 && m === 'POST') return json(await toPlace(db, f, uid, body));
+  if (a === 'district' && p.length === 2 && m === 'GET') {
+    const n = uid_(b);
+    if (n === null) throw fail(400, 'district');
+    return json(await districtInfo(db, n));
+  }
+  if (a === 'rooms' && p.length === 1 && m === 'GET') {
+    const d = uid_(url.searchParams.get('district') ?? '');
+    if (d === null || d > 100000) throw fail(400, 'district');
+    return json(await rooms(env, d));
+  }
   if (a === 'hall' && p.length === 1 && m === 'GET') return json(await hall(db, uid));
   if (a === 'block' && p.length === 1 && m === 'POST') {
     const t = body && uid_(body.user);
@@ -428,6 +497,8 @@ async function inner(env, request, u, path, body) {
     return json({ ok: 1 });
   }
   if (a === 'report' && p.length === 1 && m === 'POST') return json(await report(db, uid, body));
+  const sr = await social(db, uid, p, m, body);
+  if (sr) return json(sr);
   throw fail(404, 'not_found');
 }
 
