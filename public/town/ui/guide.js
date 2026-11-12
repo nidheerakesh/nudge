@@ -41,6 +41,22 @@ const SECTIONS = [
     'Tap Settings to hide yourself from the town, share or hide your study stats and subject, change your door, and manage blocked people.',
     'Hidden players cannot be seen or knocked on.',
   ]],
+  ['9. Real places', [
+    'You can move to a town built from the real streets of your campus or city. Use Map, then Open full map, then Choose a real place, and search by name.',
+    'Real towns have 24 plots. Only the place name is shared, never your location.',
+  ]],
+  ['10. Friends', [
+    'Tap a person to add them as a friend. You can see who is online or studying.',
+    'Invite friends to your house or to a study room.',
+  ]],
+  ['11. Study rooms', [
+    'In the Library, join a study room. Anyone in the room can start a shared round.',
+    'Chat opens during breaks. Finishing a round of 25 minutes or more with someone else while your focus timer is running gives 10 bonus coins.',
+  ]],
+  ['12. Chat and emotes', [
+    'Say something on the street, or wave with an emote.',
+    'Chat is filtered. You can report or block anyone. People reported by several others lose chat.',
+  ]],
 ];
 
 export function openGuide(ctx) {
