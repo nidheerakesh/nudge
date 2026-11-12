@@ -1,4 +1,5 @@
 import { W, H } from '/town/shared/plots.js';
+import { openPlace } from './place.js';
 
 const S = 8;
 const OSM = 'https://www.openstreetmap.org/copyright';
@@ -21,6 +22,7 @@ export function openFullMap(ctx) {
   const pname = h('span', null);
   const credit = h('a', { href: OSM, target: '_blank', rel: 'noopener' }, '© OpenStreetMap contributors');
   const where = h('div', { class: 'small', hidden: true }, pname, ' ', credit);
+  const real = h('button', { class: 'k-btn', type: 'button', style: { minHeight: '44px' }, onclick: () => { box.close(); openPlace(ctx); } }, 'Choose a real place');
   const note = h('div', { class: 'col', role: 'status', 'aria-live': 'polite', style: { minHeight: '64px' } });
   const prev = h('button', { class: 'k-btn', type: 'button', style: { minHeight: '44px' }, onclick: () => go(d - 1) }, 'Prev');
   const next = h('button', { class: 'k-btn', type: 'button', style: { minHeight: '44px' }, onclick: () => go(d + 1) }, 'Next');
@@ -158,6 +160,7 @@ export function openFullMap(ctx) {
 
   const body = h('div', { class: 'col', style: { gap: '8px' } },
     h('div', { class: 'row', style: { justifyContent: 'space-between', alignItems: 'center' } }, prev, title, next),
+    real,
     where,
     cv, note);
   const box = ctx.ui.sheet('Town map', h('div', { class: 'k-panel col', style: { padding: '12px' } }, body));
