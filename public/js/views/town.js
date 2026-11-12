@@ -4,6 +4,7 @@ import { createTownScene } from '/town/scene.js';
 import { createInteriorScene } from '/town/interior.js';
 import { drawAvatar, portrait } from '/town/avatar.js';
 import { createMinimap } from '/town/minimap.js';
+import { makeLayouts } from '/town/layouts.js';
 import { connect } from '/town/net.js';
 import { TICK_MS } from '/town/shared/protocol.js';
 import { createTimerWidget } from '/town/ui/timerwidget.js';
@@ -19,6 +20,7 @@ const PRESETS = [
 const SHOP_KINDS = ['boutique', 'homestore', 'bakery'];
 const PRESENCE_MS = 5000;
 const NS = 'http://www.w3.org/2000/svg';
+const OSM = 'https://www.openstreetmap.org/copyright';
 
 let st = null;
 let listening = false;
@@ -59,6 +61,7 @@ function mount(c0) {
   let mode = 'street';
   let district = 0;
   let plots = [];
+  let lay = null;
   let pending = null;
   let pendT = 0;
   let wasMoving = false;
@@ -103,8 +106,11 @@ function mount(c0) {
     return data;
   }
 
+  const layouts = makeLayouts((n) => call('GET', '/district/' + n));
+
   const tctx = {
     get me() { return me; },
+    layouts,
     refresh: async () => { const m = await call('GET', '/me'); me = m; tctx.onBalance(m.balance, true); return m; },
     get: (p) => call('GET', p),
     post: (p, b) => call('POST', p, b),
@@ -133,6 +139,16 @@ function mount(c0) {
     class: 'k-btn', type: 'button', 'aria-label': label, title: label, onclick: fn,
     style: { pointerEvents: 'auto', ...(extra || {}) },
   }, kicon(icon), h('span', { class: 'k-lbl' }, label));
+
+  const placeTag = h('span', null);
+  const osmLink = h('a', { href: OSM, target: '_blank', rel: 'noopener', hidden: true }, '© OpenStreetMap contributors');
+  const pbar = h('div', { class: 'k-pill small', hidden: true, style: { pointerEvents: 'auto' } }, placeTag, ' ', osmLink);
+  const placeUpdate = () => {
+    const p = lay && lay.place;
+    placeTag.textContent = p ? p.display : '';
+    pbar.hidden = !p;
+    osmLink.hidden = !p;
+  };
 
   const say = (msg) => { banner.textContent = msg || ''; banner.hidden = !msg; };
   const showInTown = () => store.pref('show_in_town', '1') !== '0';
@@ -231,7 +247,7 @@ function mount(c0) {
   function buildTown(spawn) {
     if (town) town.destroy();
     town = createTownScene({
-      engine, district, plots, players: [...seen.values()], me: sceneMe(spawn), drawAvatar: sceneAvatar,
+      engine, district, plots, layout: lay.tpl, players: [...seen.values()], me: sceneMe(spawn), drawAvatar: sceneAvatar,
     });
     town.onDoor = onDoor;
     town.onLandmark = onLandmark;
@@ -260,9 +276,12 @@ function mount(c0) {
     district = n;
     try { plots = (await tctx.get('/plots?district=' + n)).plots || []; } catch (e) { plots = []; }
     if (dead()) return;
+    lay = await layouts.load(n);
+    if (dead()) return;
     for (const p of plots) if (p.owner) names.set(p.owner.id, p.owner.name);
     buildTown(spawn);
-    if (map) { map.setCurrent(n); map.draw(); }
+    placeUpdate();
+    if (map) { map.setLayout(lay.tpl); map.setCurrent(n); map.draw(); }
     connectDistrict();
   }
 
@@ -527,8 +546,8 @@ function mount(c0) {
         const nav = (d) => h('button', { class: 'btn', type: 'button', 'aria-label': d.label, onclick: d.fn }, d.t);
         list.append(nav({ t: 'Prev', label: 'Previous district', fn: () => travel(Math.max(0, district - 1)) }), nav({ t: 'Next', label: 'Next district', fn: () => travel(district + 1) }));
         const full = h('button', { class: 'btn', type: 'button', style: { marginTop: '6px', width: '100%' }, onclick: () => { mapBox.hidden = true; lazy('/town/ui/fullmap.js', 'openFullMap'); } }, 'Open full map');
-        mapBox.append(mapCv, list, full);
-        map = createMinimap({ canvas: mapCv, count: Math.max(9, district + 4), current: district, onPick: (i) => travel(i) });
+        mapBox.append(mapCv, list, full, osmLink);
+        map = createMinimap({ canvas: mapCv, count: Math.max(9, district + 4), current: district, onPick: (i) => travel(i), layout: lay && lay.tpl });
       }
       map.setCurrent(district);
       map.draw();
@@ -601,7 +620,7 @@ function mount(c0) {
 
   async function start() {
     tctx.onBalance(me.balance);
-    pills.replaceChildren(coin, pill('Map', toggleMap, null, 'map'), chatPill, wardPill, housePill, pill('Guide', () => lazy('/town/ui/guide.js', 'openGuide'), null, 'heart'), pill('Settings', settings, null, 'gear'));
+    pills.replaceChildren(coin, pbar, pill('Map', toggleMap, null, 'map'), chatPill, wardPill, housePill, pill('Guide', () => lazy('/town/ui/guide.js', 'openGuide'), null, 'heart'), pill('Settings', settings, null, 'gear'));
     canvas = h('canvas', {
       role: 'img', tabindex: '0',
       'aria-label': 'Nudge Town. Use the arrow keys or tap to walk around. Walk to a door to knock.',

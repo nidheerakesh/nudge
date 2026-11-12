@@ -44,7 +44,33 @@ export function baseSolid(tpl) {
   }
   const f = tpl.fountain
   for (let y = f.y; y < f.y + f.h; y++) for (let x = f.x; x < f.x + f.w; x++) block(x, y)
+  for (const r of tpl.real || []) {
+    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) block(x, y)
+  }
   return solid
+}
+
+// plain pixel building for a real place: wall, roof band, windows, door
+function buildingCv(w, h) {
+  const cv = mkCanvas(w, h)
+  const g = cv.getContext('2d')
+  const roof = Math.round(h * 0.4)
+  const dx = Math.floor(w / 2) - 3, dy = h - 9
+  g.fillStyle = '#E9DCC3'
+  g.fillRect(0, 0, w, h)
+  g.fillStyle = '#B5654A'
+  g.fillRect(0, 0, w, roof)
+  g.fillStyle = '#7FB2D9'
+  for (let y = roof + 3; y + 5 <= h - 2; y += 6) for (let x = 3; x + 4 <= w - 3; x += 6) {
+    if (x < dx + 6 && x + 4 > dx && y + 5 > dy) continue
+    g.fillRect(x, y, 4, 5)
+  }
+  g.fillStyle = '#6B4226'
+  g.fillRect(dx, dy, 6, 9)
+  g.strokeStyle = '#2A1F2D'
+  g.lineWidth = 1
+  g.strokeRect(0.5, 0.5, w - 1, h - 1)
+  return cv
 }
 
 // 3x5 pixel font, 5 rows of 3 bits per glyph
@@ -222,8 +248,8 @@ function buildHouse(look, night) {
   return cv
 }
 
-export function createTownScene({ engine, district = 0, plots = [], players = [], me = {}, drawAvatar = null } = {}) {
-  const tpl = districtTemplate()
+export function createTownScene({ engine, district = 0, layout = null, plots = [], players = [], me = {}, drawAvatar = null } = {}) {
+  const tpl = layout || districtTemplate()
   const ground = tpl.ground
   const solid = new Uint8Array(W * H)
   const SPAWN = (() => { const t = spawnTile(tpl); return { x: t.x + 0.5, y: t.y + 0.5 } })()
@@ -354,6 +380,17 @@ export function createTownScene({ engine, district = 0, plots = [], players = []
       const f = tpl.fountain
       const o = sprObj('fountain.0', f, { anim: 'fountain' })
       if (o) addStatic(o)
+    }
+
+    for (const r of tpl.real || []) {
+      const cv = buildingCv(r.w * T, r.h * T)
+      const bot = (r.y + r.h) * T, px = (r.x + r.w / 2) * T
+      const o = {
+        y: bot, x0: r.x * T, x1: (r.x + r.w) * T, y0: r.y * T, y1: bot, px, py: bot,
+        paint: (ctx, ox, oy) => ctx.drawImage(cv, Math.round(r.x * T + ox), Math.round(r.y * T + oy)),
+      }
+      if (r.name) o.label = plaque(r.name, px, r.y * T - 2)
+      addStatic(o)
     }
 
     const bySlot = new Map()
@@ -654,6 +691,7 @@ export function createTownScene({ engine, district = 0, plots = [], players = []
 
   function drawStatic(ctx, o, ox, oy, S) {
     if (o.house) { drawHouse(ctx, o, ox, oy, S); return }
+    if (o.paint) { o.paint(ctx, ox, oy); if (o.label) o.label(ctx, ox, oy); return }
     let id = o.id
     if (o.lamp) id = S.lit > 0.5 ? 'lamp.night' : 'lamp.day'
     if (o.anim) {
