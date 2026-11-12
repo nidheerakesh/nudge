@@ -113,6 +113,7 @@ function mount(c0) {
     get net() { return net; },
     toast: (m, o) => ui.toast(m, o),
     returnToStreet: () => returnToStreet(),
+    enter: (i) => (mode === 'street' ? enterDistrict(i) : null),
     onBalance: (n, quiet) => {
       if (me && typeof n === 'number') me.balance = n;
       coinNum.textContent = String(me ? me.balance : 0);
@@ -500,7 +501,8 @@ function mount(c0) {
         const list = h('div', { class: 'row', style: { marginTop: '6px' } });
         const nav = (d) => h('button', { class: 'btn', type: 'button', 'aria-label': d.label, onclick: d.fn }, d.t);
         list.append(nav({ t: 'Prev', label: 'Previous district', fn: () => travel(Math.max(0, district - 1)) }), nav({ t: 'Next', label: 'Next district', fn: () => travel(district + 1) }));
-        mapBox.append(mapCv, list);
+        const full = h('button', { class: 'btn', type: 'button', style: { marginTop: '6px', width: '100%' }, onclick: () => { mapBox.hidden = true; lazy('/town/ui/fullmap.js', 'openFullMap'); } }, 'Open full map');
+        mapBox.append(mapCv, list, full);
         map = createMinimap({ canvas: mapCv, count: Math.max(9, district + 4), current: district, onPick: (i) => travel(i) });
       }
       map.setCurrent(district);

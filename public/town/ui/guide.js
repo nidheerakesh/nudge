@@ -1,7 +1,7 @@
 const SECTIONS = [
   ['Welcome', [
     'Nudge Town is a shared study village. You earn coins by studying, then spend them on clothes, furniture and food, and you can visit other students’ houses.',
-    'Walk with the arrow keys or by tapping. The Map button shows the whole town.',
+    'Walk with the arrow keys or by tapping. The Map button shows the districts, and Open full map shows every plot in detail.',
   ]],
   ['1. Study to earn coins', [
     'Start a timer on the Focus tab, or tap Start a focus timer inside the Library. Press Done when you finish.',
@@ -21,6 +21,7 @@ const SECTIONS = [
     'You get a plot when you join. Tap House to open the editor.',
     'Style: pick roof, walls, door, floor and wallpaper, name your house, and set the door (see below). Press Save.',
     'Furnish: buy furniture at the Home Store first. In the editor choose a piece from the tray, then tap a tile to place it. Tap a placed piece to Move, Flip or Delete it. You can place up to 40 pieces and need to keep the doorway clear. Press Save, then Done.',
+    'Location: House > Location, or Map > Open full map, shows every plot in every district. Tap a free green plot and press Move my house here. Your furniture and style move with you.',
     'Walk to your own door to go inside and see it.',
   ]],
   ['5. Door settings', [

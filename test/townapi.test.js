@@ -301,3 +301,27 @@ test('deleteAccount removes town rows and frees the plot', async () => {
   const r = await call(env, 3, 'POST', '/api/town/join');
   assert.equal(r.j.plot.slot, 0);
 });
+
+test('move plot: free plot works, taken plot refused, old plot freed', async () => {
+  const env = mk();
+  const a = await call(env, 1, 'POST', '/api/town/join');
+  const b = await call(env, 2, 'POST', '/api/town/join');
+  assert.equal((await call(env, 3, 'POST', '/api/town/plot', { district: 0, slot: 5 })).s, 409);
+  const taken = await call(env, 1, 'POST', '/api/town/plot', { district: 0, slot: b.j.plot.slot });
+  assert.equal(taken.s, 409);
+  assert.equal((await call(env, 1, 'GET', '/api/town/me')).j.plot.slot, a.j.plot.slot);
+  const mv = await call(env, 1, 'POST', '/api/town/plot', { district: 0, slot: 20 });
+  assert.equal(mv.s, 200);
+  assert.equal(mv.j.plot.slot, 20);
+  const me = await call(env, 1, 'GET', '/api/town/me');
+  assert.equal(me.j.plot.slot, 20);
+  const list = await call(env, 2, 'GET', '/api/town/plots', undefined, '?district=0');
+  assert.ok(list.j.taken.includes(20) && !list.j.taken.includes(a.j.plot.slot));
+  const c = await call(env, 3, 'POST', '/api/town/join');
+  assert.equal(c.j.plot.slot, a.j.plot.slot);
+  assert.equal(await env.DB.prepare('SELECT plot_id FROM houses WHERE user_id=1').first('plot_id'), await env.DB.prepare('SELECT id FROM town_plots WHERE user_id=1').first('id'));
+  for (const bad of [{ district: 0, slot: 40 }, { district: -1, slot: 0 }, { district: 9, slot: 0 }, { district: 'a', slot: 0 }, {}]) {
+    assert.equal((await call(env, 1, 'POST', '/api/town/plot', bad)).s, 400);
+  }
+  assert.equal((await call(env, 1, 'POST', '/api/town/plot', { district: 1, slot: 3 })).s, 200);
+});

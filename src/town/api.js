@@ -1,5 +1,5 @@
 import { byId, SKIN, HAIR_STYLES, HAIR_COLORS } from '../../public/town/shared/catalog.js';
-import { nextSlot, plotWorld } from '../../public/town/shared/plots.js';
+import { nextSlot, plotWorld, PLOTS } from '../../public/town/shared/plots.js';
 import { balance, buy, buyFood, eat, owns, ownedSet } from './coins.js';
 
 const SIZES = { 'house:hut': [6, 5], 'house:small': [8, 6], 'house:medium': [10, 7], 'house:large': [12, 8], 'house:manor': [14, 9] };
@@ -229,7 +229,28 @@ async function plots(db, me_, d) {
     if (r.user_id !== me_ && (await blocked(db, me_, r.user_id))) continue;
     out.push({ slot: r.slot, owner: { id: r.user_id, name: r.name, look: look(r) }, house: { ...HOUSE_LOOK(r), door_mode: r.door_mode } });
   }
-  return { district: d, plots: out };
+  const tk = await db.prepare('SELECT slot FROM town_plots WHERE district=? AND user_id IS NOT NULL').bind(d).all();
+  return { district: d, plots: out, taken: tk.results.map((r) => r.slot) };
+}
+
+async function movePlot(db, uid, body) {
+  const d = body && body.district;
+  const s = body && body.slot;
+  if (!isInt(d) || !isInt(s) || d < 0 || s < 0 || s >= PLOTS) throw fail(400, 'plot');
+  const cur = await needJoin(db, uid);
+  if (cur.district === d && cur.slot === s) return { plot: { district: d, slot: s, world: plotWorld(d, s) } };
+  const top = await db.prepare('SELECT COALESCE(MAX(district),0) AS m FROM town_plots WHERE user_id IS NOT NULL').first('m');
+  if (d > Number(top) + 1) throw fail(400, 'plot');
+  await db.prepare('INSERT OR IGNORE INTO town_plots(district,slot,user_id) VALUES(?,?,NULL)').bind(d, s).run();
+  await db.prepare('UPDATE town_plots SET user_id=NULL WHERE id=? AND user_id=?').bind(cur.id, uid).run();
+  const up = await db.prepare('UPDATE town_plots SET user_id=? WHERE district=? AND slot=? AND user_id IS NULL').bind(uid, d, s).run();
+  if (!up.meta.changes) {
+    await db.prepare('UPDATE town_plots SET user_id=? WHERE id=? AND user_id IS NULL').bind(uid, cur.id).run();
+    throw fail(409, 'taken');
+  }
+  const now = await joined(db, uid);
+  await db.prepare('UPDATE houses SET plot_id=? WHERE user_id=?').bind(now.id, uid).run();
+  return { plot: { district: d, slot: s, world: plotWorld(d, s) } };
 }
 
 const secs = (t) => (t > 1e12 ? t / 1000 : t);
@@ -387,6 +408,7 @@ async function inner(env, request, u, path, body) {
     if (d === null || d > 100000) throw fail(400, 'district');
     return json(await plots(db, uid, d));
   }
+  if (a === 'plot' && p.length === 1 && m === 'POST') return json(await movePlot(db, uid, body));
   if (a === 'hall' && p.length === 1 && m === 'GET') return json(await hall(db, uid));
   if (a === 'block' && p.length === 1 && m === 'POST') {
     const t = body && uid_(body.user);

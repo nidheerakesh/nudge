@@ -186,9 +186,11 @@ export async function openHouseEditor(ctx) {
     const go = (m) => { pickd = m; box.close(); };
     const body = h('div', { class: 'col' },
       h('button', { class: 'k-btn pink', type: 'button', style: { minHeight: '44px' }, onclick: () => go('style') }, 'Style: roof, walls, door, name'),
-      h('button', { class: 'k-btn pink', type: 'button', style: { minHeight: '44px' }, onclick: () => go('furnish') }, 'Furnish: place furniture inside'));
+      h('button', { class: 'k-btn pink', type: 'button', style: { minHeight: '44px' }, onclick: () => go('furnish') }, 'Furnish: place furniture inside'),
+      h('button', { class: 'k-btn pink', type: 'button', style: { minHeight: '44px' }, onclick: () => go('move') }, 'Location: choose where your house is'));
     const box = ctx.ui.sheet('Your house', h('div', { class: 'k-panel col', style: { padding: '12px' } }, body), { onClose: () => res(pickd) });
   });
   if (choice === 'style') await styleSheet(ctx);
   else if (choice === 'furnish') await furnish(ctx);
+  else if (choice === 'move') (await import('/town/ui/fullmap.js')).openFullMap(ctx);
 }
