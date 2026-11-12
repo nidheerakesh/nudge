@@ -10,6 +10,7 @@ import { TICK_MS } from '/town/shared/protocol.js';
 import { createTimerWidget } from '/town/ui/timerwidget.js';
 import { createKnock, whyText } from '/town/ui/knock.js';
 import { createChat } from '/town/ui/chat.js';
+import { createStreetBar } from '/town/ui/streetbar.js';
 import { kicon } from '/town/ui/icons.js';
 
 const PRESETS = [
@@ -254,6 +255,7 @@ function mount(c0) {
     town.onPlayer = (id) => { const p = seen.get(id); if (p && p.name) ui.toast(p.name); };
     engine.setScene(town);
     lastKey = null;
+    bar.show(mode === 'street');
     presence();
   }
 
@@ -327,6 +329,9 @@ function mount(c0) {
       case 'emote':
         if (town) town.emote(m.id, m.k);
         break;
+      case 'chat':
+        if (town && !(me.blocked || []).includes(m.id)) town.say(m.id, m.text);
+        break;
       case 'knock':
         knock.incoming(m, (id, allow) => { if (net) net.send({ t: 'reply', id, allow }); });
         break;
@@ -337,6 +342,7 @@ function mount(c0) {
         if (m.code === 'nojoin') say('Move in first to join the town.');
         else if (m.code === 'full') say('This district is full right now. Try another one on the map.');
         else if (m.code === 'rate') { knock.done(); pending = null; ui.toast('Too many knocks. Try again in a minute.'); }
+        else if (m.code === 'muted') ui.toast('You cannot chat right now');
         break;
     }
   }
@@ -404,6 +410,7 @@ function mount(c0) {
   async function enterHouse(owner) {
     if (mode !== 'street') return;
     mode = 'house';
+    bar.show(false);
     houseOwner = owner;
     houseFails = 0;
     houseLost = false;
@@ -495,6 +502,7 @@ function mount(c0) {
     const hall = kind === 'library' || kind === 'hall';
     if (!hall && !SHOP_KINDS.includes(kind)) return;
     mode = 'shop';
+    bar.show(false);
     if (town) lastPos = town.player();
     inside = { k: hall ? 'hall' : 'shop', kind: hall ? 'hall' : kind };
     persist();
@@ -532,6 +540,16 @@ function mount(c0) {
         if (me && !me.blocked.includes(p.id)) me.blocked.push(p.id);
         ui.toast(p.name + ' is blocked');
       } catch (e) { ui.toast('Could not block'); }
+    },
+  });
+
+  const bar = createStreetBar({
+    ui,
+    send: (m) => {
+      if (!net) return false;
+      const ok = net.send(m);
+      if (ok && m.t === 'emote' && town) town.emote(uid(), m.k);
+      return ok;
     },
   });
 
@@ -627,7 +645,7 @@ function mount(c0) {
       style: { display: 'block', width: '100%', height: '100%', touchAction: 'none' },
     });
     el.replaceChildren(canvas, pills, banner, mapBox);
-    el.append(chat.el, knock.el);
+    el.append(chat.el, knock.el, bar.el);
     widget = createTimerWidget({ ui, store });
     widget.el.style.cssText += ';position:absolute;right:8px;bottom:8px;z-index:4';
     el.append(widget.el);
@@ -684,6 +702,7 @@ function mount(c0) {
     if (town) town.destroy();
     if (map) map.destroy();
     chat.destroy();
+    bar.destroy();
     knock.destroy();
     if (engine) engine.destroy();
     el.remove();
