@@ -1,5 +1,6 @@
 import { addDays } from './srs.js';
 import { api } from './api.js';
+import { toast } from './ui.js';
 
 export { addDays };
 
@@ -13,6 +14,18 @@ export const S = { user: null, prefs: {}, courses: [], assessments: [], topics: 
 const subs = new Set();
 let tm = null;
 let busy = 0;
+let authed = false;
+let gen = 0;
+
+export function setAuthed(v) {
+  authed = !!v;
+}
+
+export function reset() {
+  gen++;
+  tm = null;
+  for (const k in S) S[k] = Array.isArray(S[k]) ? [] : k === 'prefs' ? {} : null;
+}
 
 export function on(fn) {
   subs.add(fn);
@@ -44,8 +57,10 @@ export function parseHash(hash) {
 
 export async function load() {
   busy++;
+  const g = gen;
   try {
     const res = await api('/api/all');
+    if (g !== gen) return;
     for (const k in res) S[k] = res[k];
     emit();
   } finally { busy--; }
@@ -104,13 +119,31 @@ export async function setPrefs(obj) {
 
 export const timer = () => tm;
 
+const sid = t => (t ? t.session_id : null);
+
 export async function pullTimer() {
+  const g = gen;
   const res = await api('/api/timer');
-  tm = res.data || null;
+  if (g !== gen) return;
+  const n = res.data || null;
+  if (tm && n && sid(n) !== sid(tm)) toast('Timer is running on another device');
+  tm = n;
   emit();
 }
 
-const saveTimer = () => api('/api/timer', { method: 'PUT', body: { data: tm } });
+async function saveTimer(prev) {
+  try {
+    await api('/api/timer', { method: 'PUT', body: { data: tm, prev } });
+    return true;
+  } catch (e) {
+    if (e.status !== 409) throw e;
+    const d = (e.data && e.data.data) || null;
+    tm = d;
+    if (d) toast('Timer is running on another device');
+    emit();
+    return false;
+  }
+}
 
 export function elapsedMs(t, now = Date.now()) {
   return (t.paused_at || now) - t.started - (t.paused_ms || 0);
@@ -122,34 +155,59 @@ export function remainingMs(t, now = Date.now()) {
 
 export async function startTimer({ task_id, block_id, title, mins }) {
   if (tm) await finishTimer('stopped');
+  if (tm) return;
   const [row] = await add('sessions', { task_id: task_id || null, start_at: new Date().toISOString(), plan_mins: mins, end_kind: 'open' });
+  const prev = sid(tm);
   tm = { task_id: task_id || null, block_id: block_id || null, title: title || '', mins, session_id: row.id, started: Date.now(), paused_at: null, paused_ms: 0, pauses: 0 };
-  await saveTimer();
+  if (!(await saveTimer(prev))) {
+    upd('sessions', row.id, { act_mins: 0, pauses: 0, end_kind: 'stopped' }).catch(() => {});
+    return;
+  }
   emit();
 }
 
 export async function pauseTimer() {
   if (!tm || tm.paused_at) return;
+  const prev = sid(tm);
   tm = { ...tm, paused_at: Date.now(), pauses: tm.pauses + 1 };
   emit();
-  await saveTimer();
+  await saveTimer(prev);
 }
 
 export async function resumeTimer() {
   if (!tm || !tm.paused_at) return;
+  const prev = sid(tm);
   tm = { ...tm, paused_ms: tm.paused_ms + Date.now() - tm.paused_at, paused_at: null };
   emit();
-  await saveTimer();
+  await saveTimer(prev);
 }
 
 export async function finishTimer(end_kind) {
   const t = tm;
   if (!t) return null;
   const act = Math.max(0, Math.round(elapsedMs(t) / 60000));
-  tm = null;
-  const row = await upd('sessions', t.session_id, { act_mins: act, pauses: t.pauses, end_kind });
-  if (end_kind === 'done' && t.block_id) await upd('blocks', t.block_id, { done: 1 });
-  await saveTimer();
+  let row = null;
+  try {
+    try {
+      row = await upd('sessions', t.session_id, { act_mins: act, pauses: t.pauses, end_kind });
+      if (end_kind === 'done' && t.block_id) await upd('blocks', t.block_id, { done: 1 });
+    } catch (e) {
+      if (e.status !== 409) throw e;
+    }
+    let d = null;
+    try {
+      await api('/api/timer', { method: 'PUT', body: { data: null, prev: t.session_id } });
+    } catch (e) {
+      if (e.status !== 409) throw e;
+      d = (e.data && e.data.data) || null;
+    }
+    tm = d;
+    if (d) toast('Timer is running on another device');
+  } catch (e) {
+    toast('Could not stop the timer. Try again.');
+    emit();
+    return null;
+  }
   emit();
   return row;
 }
@@ -157,7 +215,7 @@ export async function finishTimer(end_kind) {
 export const rateSession = (id, rating) => upd('sessions', id, { rating });
 
 export async function refreshAll() {
-  if (busy) return;
+  if (busy || !authed) return;
   try { await Promise.all([load(), pullTimer()]); } catch (e) { /* ignore */ }
 }
 

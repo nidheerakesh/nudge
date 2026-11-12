@@ -94,8 +94,8 @@ export async function signup(db, { email, password, name } = {}, now = Date.now(
 export async function login(db, { email, password } = {}, now = Date.now()) {
   const em = String(email || '').trim().toLowerCase();
   const pw = String(password || '');
-  const lim = await db.prepare('SELECT n, until FROM login_fail WHERE email=?').bind(em).first();
-  if (lim && lim.until > now) return { error: 'locked', retry: Math.ceil((lim.until - now) / 1000) };
+  const lim = await db.prepare('INSERT INTO login_fail(email,n,until) VALUES(?,1,0) ON CONFLICT(email) DO UPDATE SET n=CASE WHEN until>? THEN n+1 WHEN until>0 THEN 1 ELSE n+1 END, until=CASE WHEN until>? THEN until WHEN (CASE WHEN until>0 THEN 1 ELSE n+1 END)>=5 THEN ? ELSE 0 END RETURNING n, until').bind(em, now, now, now + 15 * 60 * 1000).first();
+  if (lim.until > now && lim.n > 5) return { error: 'locked', retry: Math.ceil((lim.until - now) / 1000) };
   const row = await db.prepare('SELECT id, email, name, pw_hash, salt FROM users WHERE email=?').bind(em).first();
   let ok;
   if (row) ok = await verifyPassword(pw, row.pw_hash, row.salt);
@@ -103,16 +103,7 @@ export async function login(db, { email, password } = {}, now = Date.now()) {
     await derive(pw, new Uint8Array(16));
     ok = false;
   }
-  if (!ok) {
-    let n = (lim ? lim.n : 0) + 1;
-    let until = 0;
-    if (n >= 5) {
-      until = now + 15 * 60 * 1000;
-      n = 0;
-    }
-    await db.prepare('INSERT INTO login_fail(email,n,until) VALUES(?,?,?) ON CONFLICT(email) DO UPDATE SET n=excluded.n, until=excluded.until').bind(em, n, until).run();
-    return { error: 'invalid' };
-  }
+  if (!ok) return { error: 'invalid' };
   await db.prepare('DELETE FROM login_fail WHERE email=?').bind(em).run();
   const token = await createSession(db, row.id, now);
   return { user: { id: row.id, email: row.email, name: row.name }, token };

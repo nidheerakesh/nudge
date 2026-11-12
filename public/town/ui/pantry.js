@@ -42,7 +42,7 @@ export function openPantry(ctx) {
       busy = true;
       redraw();
       try {
-        const r = await ctx.post('/api/town/eat', { item: id });
+        const r = await ctx.post('/eat', { item: id });
         if (r && r.fed_until) ctx.me.fed_until = r.fed_until;
         pv.setFood(id);
         pv.play('break');

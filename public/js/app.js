@@ -15,6 +15,7 @@ const TABS = [
 ];
 const $ = id => document.getElementById(id);
 let authed = false;
+let authUp = false;
 let cur = { tab: 'today', params: {} };
 let raf = 0;
 let pend = false;
@@ -111,8 +112,18 @@ document.addEventListener('focusout', () => {
 });
 
 function authScreen() {
+  if (authUp) return;
+  authUp = true;
   authed = false;
+  store.setAuthed(false);
+  ui.closeAll();
   clearInterval(tick);
+  cancelAnimationFrame(raf);
+  pend = false;
+  onboarded = false;
+  cur = { tab: 'today', params: {} };
+  store.reset();
+  document.title = 'Nudge';
   chrome(false);
   const root = $('view');
   let mode = 'login';
@@ -192,6 +203,8 @@ async function start() {
   await Promise.all([api('/api/me').then(r => { S.user = r.user; }), store.load()]);
   await store.pullTimer().catch(() => {});
   authed = true;
+  authUp = false;
+  store.setAuthed(true);
   if (!location.hash || location.hash === '#/' || location.hash.startsWith('#/auth')) location.hash = '#/today';
   render();
 }

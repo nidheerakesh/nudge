@@ -13,15 +13,15 @@ export async function balance(db, uid) {
 export async function awardForSession(db, uid, s) {
   const sid = typeof s === 'object' && s ? s.id : s;
   if (!Number.isInteger(sid)) return 0;
-  const sess = await db.prepare('SELECT start_at FROM sessions WHERE id=? AND user_id=?').bind(sid, uid).first();
+  const sess = await db.prepare('SELECT id FROM sessions WHERE id=? AND user_id=?').bind(sid, uid).first();
   if (!sess) return 0;
-  const act = await db.prepare('SELECT verified_secs FROM session_active WHERE session_id=? AND user_id=?').bind(sid, uid).first();
+  const act = await db.prepare("SELECT verified_secs, date(started/1000,'unixepoch') AS day FROM session_active WHERE session_id=? AND user_id=?").bind(sid, uid).first();
   if (!act) return 0;
   const mins = Math.floor((act.verified_secs || 0) / 60);
   if (mins < MIN_MINS) return 0;
-  const day = String(sess.start_at).slice(0, 10);
+  const day = act.day;
   const used = await db
-    .prepare("SELECT COALESCE(SUM(l.delta),0) AS n FROM coin_ledger l JOIN sessions x ON CAST(x.id AS TEXT)=l.ref WHERE l.user_id=? AND l.reason='session' AND x.user_id=? AND substr(x.start_at,1,10)=?")
+    .prepare("SELECT COALESCE(SUM(l.delta),0) AS n FROM coin_ledger l JOIN session_active x ON CAST(x.session_id AS TEXT)=l.ref WHERE l.user_id=? AND l.reason='session' AND x.user_id=? AND date(x.started/1000,'unixepoch')=?")
     .bind(uid, uid, day)
     .first('n');
   const amt = Math.min(mins, DAY_CAP, DAY_CAP - (Number(used) || 0));

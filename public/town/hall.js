@@ -113,11 +113,11 @@ export async function openHallScene(ctx) {
   }
 
   async function fetchBoard() {
-    const path = '/api/town/hall'
+    const path = '/hall'
     if (typeof ctx.get === 'function') {
       try { return await ctx.get(path) } catch (e) { /* fall through to fetch */ }
     }
-    const r = await fetch(path, { credentials: 'same-origin' })
+    const r = await fetch('/api/town' + path, { credentials: 'same-origin' })
     if (!r.ok) throw new Error('board')
     return r.json()
   }

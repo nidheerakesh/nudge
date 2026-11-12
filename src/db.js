@@ -69,6 +69,10 @@ export async function patch(db, uid, table, id, body) {
   const keys = Object.keys(o);
   if (!keys.length) throw err(400, 'column');
   await checkRefs(db, uid, o);
+  if (table === 'sessions' && ('act_mins' in o || 'end_kind' in o || 'pauses' in o)) {
+    const cur = await db.prepare('SELECT end_kind FROM sessions WHERE id=? AND user_id=?').bind(id, uid).first();
+    if (cur && cur.end_kind !== 'open') throw err(409, 'closed');
+  }
   const sets = keys.map((k) => `${k}=?`);
   if (table === 'notes' && !keys.includes('updated')) sets.push("updated=datetime('now')");
   const res = await db.prepare(`UPDATE ${table} SET ${sets.join(',')} WHERE id=? AND user_id=? RETURNING *`).bind(...keys.map((k) => o[k]), id, uid).all();
@@ -172,13 +176,19 @@ export async function getTimer(db, uid) {
   return row ? JSON.parse(row.data) : null;
 }
 
-export async function putTimer(db, uid, data) {
+export async function putTimer(db, uid, data, prev) {
+  const stored = await getTimer(db, uid);
+  const cur = stored ? stored.session_id : undefined;
+  const p = prev === undefined ? null : prev;
   if (data === null || data === undefined) {
+    if (cur !== undefined && p !== cur) return { error: 'stale', data: stored };
     await db.prepare('DELETE FROM timer WHERE user_id=?').bind(uid).run();
-    return;
+    return null;
   }
   if (typeof data !== 'object' || Array.isArray(data)) throw err(400, 'body');
+  if (cur !== undefined && cur !== data.session_id && p !== cur) return { error: 'busy', data: stored };
   const s = JSON.stringify(data);
   if (s.length > 4000) throw err(400, 'value');
   await db.prepare('INSERT INTO timer(user_id,data) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET data=excluded.data').bind(uid, s).run();
+  return null;
 }

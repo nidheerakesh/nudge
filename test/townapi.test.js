@@ -265,7 +265,7 @@ test('session patch awards coins, failure never fails the patch', async () => {
   const row = await patch(db, 1, 'sessions', 1, { end_kind: 'done' });
   assert.equal(row.end_kind, 'done');
   assert.equal(await db.prepare('SELECT SUM(delta) s FROM coin_ledger WHERE user_id=1').first('s'), 30);
-  await patch(db, 1, 'sessions', 1, { end_kind: 'stopped' });
+  await assert.rejects(patch(db, 1, 'sessions', 1, { end_kind: 'stopped' }), (e) => e.status === 409);
   assert.equal(await db.prepare('SELECT SUM(delta) s FROM coin_ledger WHERE user_id=1').first('s'), 30);
   await patch(db, 1, 'sessions', 1, { rating: 3 });
   const bad = d1();

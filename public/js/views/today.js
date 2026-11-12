@@ -8,14 +8,17 @@ const r5 = n => Math.ceil(n / 5) * 5;
 
 let sel = null;
 let prop = null;
+const sigOf = (S, day) => JSON.stringify([S.tasks.filter(t => !t.done_at).map(t => t.id),
+  S.blocks.filter(b => b.day === day).map(b => [b.id, b.start, b.mins])]);
 let seen = false;
+let saving = false;
 
 export default function view(root, ctx) {
   const { S, ui, store } = ctx;
   const { h, icon } = ui;
   const tod = store.today();
   if (!sel) sel = tod;
-  if (prop && prop.day !== sel) prop = null;
+  if (prop && (prop.day !== sel || prop.sig !== sigOf(S, sel))) prop = null;
   if (ctx.params.plan !== '1') seen = false;
   const day = sel;
   const open = S.tasks.filter(t => !t.done_at);
@@ -135,16 +138,19 @@ export default function view(root, ctx) {
   const plan = () => {
     if (!open.length) { ui.toast('Add tasks first, then plan your day'); return; }
     const res = suggest({ day, tasks: S.tasks, blocks: S.blocks, prefs: S.prefs, now: { day: tod, hm: store.nowHM() } });
-    prop = { day, ...res };
+    prop = { day, sig: sigOf(S, day), ...res };
     ctx.refresh();
   };
   const accept = async () => {
+    if (!prop || saving) return;
     const bl = prop.blocks;
-    prop = null;
+    saving = true;
     try {
       const rows = await ctx.add('blocks', bl);
+      prop = null;
       ui.toast('Plan saved', { action: 'Undo', onAction: () => Promise.all(rows.map(r => ctx.del('blocks', r.id))).catch(fail) });
     } catch (e) { fail(); }
+    saving = false;
   };
   if (ctx.params.plan === '1' && !seen) {
     seen = true;

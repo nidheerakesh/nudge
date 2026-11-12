@@ -95,7 +95,8 @@ async function route(env, request, u, path, body) {
   if (path === '/api/timer') {
     if (m === 'GET') return json({ data: await getTimer(env.DB, u.id) });
     if (m === 'PUT') {
-      await putTimer(env.DB, u.id, body ? body.data : null);
+      const bad = await putTimer(env.DB, u.id, body ? body.data : null, body ? body.prev : null);
+      if (bad) return json(bad, 409);
       return json({ ok: 1 });
     }
   }

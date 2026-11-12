@@ -16,7 +16,7 @@ async function sess(db, uid, verified, day = '2026-01-05', active = verified) {
   sid++;
   await db.prepare('INSERT INTO sessions(id,user_id,start_at) VALUES(?,?,?)').bind(sid, uid, day + 'T10:00:00Z').run();
   if (verified !== null) {
-    await db.prepare('INSERT INTO session_active(session_id,user_id,started,last_ping,active_secs,verified_secs,last_ok) VALUES(?,?,0,0,?,?,0)').bind(sid, uid, active * 60, verified * 60).run();
+    await db.prepare('INSERT INTO session_active(session_id,user_id,started,last_ping,active_secs,verified_secs,last_ok) VALUES(?,?,?,0,?,?,0)').bind(sid, uid, Date.parse(day + 'T10:00:00Z'), active * 60, verified * 60).run();
   }
   return sid;
 }
@@ -112,4 +112,15 @@ test('food and eating', async () => {
   await eat(db, 1, 'food:pizza', now);
   await fail(eat(db, 1, 'food:pizza', now), 'pantry');
   assert.equal(await balance(db, 1), 40);
+});
+
+test('day cap uses server start, not client start_at', async () => {
+  const db = mk();
+  for (let i = 0; i < 4; i++) {
+    const s = await sess(db, 1, 100, '2026-02-0' + (i + 1));
+    await db.prepare("UPDATE sessions SET start_at=? WHERE id=?").bind('2026-03-0' + (i + 1) + 'T10:00:00Z', s).run();
+    await db.prepare('UPDATE session_active SET started=? WHERE session_id=?').bind(Date.parse('2026-01-05T10:00:00Z') + i * 1000, s).run();
+    await awardForSession(db, 1, s);
+  }
+  assert.equal(await balance(db, 1), 240);
 });

@@ -124,3 +124,26 @@ test('cookie flags', () => {
   const c = A.sessionCookie('abc');
   for (const s of ['HttpOnly', 'Secure', 'SameSite=Lax', 'Path=/', 'Max-Age=2592000']) assert.ok(c.includes(s), s);
 });
+
+test('login reserves attempt before verification', async () => {
+  const db = fresh();
+  await A.signup(db, { email: 'a@b.co', password: P });
+  const t0 = Date.now();
+  const ps = [];
+  for (let i = 0; i < 12; i++) ps.push(A.login(db, { email: 'a@b.co', password: 'wrongwrong' }, t0));
+  const rs = await Promise.all(ps);
+  assert.equal(rs.filter((r) => r.error === 'invalid').length, 5);
+  assert.equal(rs.filter((r) => r.error === 'locked').length, 7);
+  assert.equal((await A.login(db, { email: 'a@b.co', password: P }, t0 + 1000)).error, 'locked');
+  assert.equal((await A.login(db, { email: 'A@B.co', password: P }, t0 + 1000)).error, 'locked');
+  assert.ok((await A.login(db, { email: 'a@b.co', password: P }, t0 + 16 * 60 * 1000)).token);
+});
+
+test('success resets failure counter', async () => {
+  const db = fresh();
+  await A.signup(db, { email: 'a@b.co', password: P });
+  for (let i = 0; i < 3; i++) await A.login(db, { email: 'a@b.co', password: 'wrongwrong' });
+  assert.ok((await A.login(db, { email: 'a@b.co', password: P })).token);
+  assert.equal(await db.prepare('SELECT n FROM login_fail WHERE email=?').bind('a@b.co').first(), null);
+  for (let i = 0; i < 4; i++) assert.equal((await A.login(db, { email: 'a@b.co', password: 'wrongwrong' })).error, 'invalid');
+});

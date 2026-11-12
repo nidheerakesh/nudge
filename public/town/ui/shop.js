@@ -39,7 +39,7 @@ function homestore(ctx) {
           note: here ? h('div', { class: 'col', style: { alignItems: 'center' } }, note, h('span', { class: 'badge ok' }, 'Your house')) : note,
           buy: () => doBuy(it.id),
           use: own && !here ? { label: 'Move in', fn: async () => {
-            try { await ctx.put('/api/town/house', { size: it.id }); await ctx.refresh(); ctx.toast('Your house is now ' + it.name + '.'); } catch (e) { oops(ctx, e); }
+            try { await ctx.put('/house', { size: it.id }); await ctx.refresh(); ctx.toast('Your house is now ' + it.name + '.'); } catch (e) { oops(ctx, e); }
             redraw();
           } } : null,
           active: false,

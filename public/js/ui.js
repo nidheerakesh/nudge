@@ -24,6 +24,7 @@ function add(el, kids) {
 const layer = () => document.getElementById('layer') || document.body;
 let uid = 0;
 let tt = null;
+const stack = [];
 
 export function toast(msg, { action, onAction, ms = 4000 } = {}) {
   const old = layer().querySelector('.toast');
@@ -49,6 +50,8 @@ export function sheet(title, body, { onClose } = {}) {
   const close = () => {
     if (shut) return;
     shut = true;
+    const k = stack.indexOf(ctl);
+    if (k >= 0) stack.splice(k, 1);
     document.removeEventListener('keydown', key, true);
     bg.remove();
     el.remove();
@@ -56,6 +59,7 @@ export function sheet(title, body, { onClose } = {}) {
     if (onClose) onClose();
   };
   function key(e) {
+    if (stack[stack.length - 1] !== ctl) return;
     if (e.key === 'Escape') { e.stopPropagation(); close(); return; }
     if (e.key !== 'Tab') return;
     const f = [...el.querySelectorAll('button,input,select,textarea,a[href],[tabindex]:not([tabindex="-1"])')].filter(n => !n.disabled);
@@ -67,11 +71,19 @@ export function sheet(title, body, { onClose } = {}) {
   }
   bg.addEventListener('click', close);
   x.addEventListener('click', close);
+  const ctl = { close };
+  stack.push(ctl);
   document.addEventListener('keydown', key, true);
   layer().append(bg, el);
   const first = box.querySelector('input,select,textarea,button') || x;
   first.focus();
-  return { close };
+  return ctl;
+}
+
+export function closeAll() {
+  for (const c of [...stack].reverse()) c.close();
+  clearTimeout(tt);
+  layer().querySelectorAll('.sheet,.sheet-bg,.toast').forEach(n => n.remove());
 }
 
 export function confirmBox(msg, { ok = 'OK', danger = false } = {}) {

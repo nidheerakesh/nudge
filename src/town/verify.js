@@ -2,6 +2,7 @@ const MIN = 60000;
 const WINDOW = 90000;
 const GAP = 10000;
 const TAIL = 480;
+const STALE = 2 * WINDOW;
 const err = (status, error) => ({ status, error });
 const out = (data, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
@@ -104,6 +105,11 @@ async function ping(db, uid, body, now, rand) {
   if (!sess) throw err(404, 'not_found');
   if (sess.end_kind !== 'open') throw err(409, 'closed');
   const paused = !!(body && body.paused);
+  const other = await db
+    .prepare("SELECT 1 AS x FROM session_active a JOIN sessions s ON s.id=a.session_id WHERE a.user_id=? AND a.session_id<>? AND a.ended=0 AND s.end_kind='open' AND a.last_ping>?")
+    .bind(uid, sid, now - STALE)
+    .first();
+  if (other) throw err(409, 'busy');
   let row = await load(db, uid, sid);
   if (!row) {
     const c = firstCheck(now, sess.plan_mins, rand);

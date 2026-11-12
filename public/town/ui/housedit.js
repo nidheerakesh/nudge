@@ -46,7 +46,7 @@ function styleSheet(ctx) {
       if (busy) return;
       busy = true;
       try {
-        await ctx.put('/api/town/house', { ...sel, name: name.value.trim().slice(0, 24), door_mode: mode });
+        await ctx.put('/house', { ...sel, name: name.value.trim().slice(0, 24), door_mode: mode });
         await ctx.refresh();
         ctx.toast('House saved.');
         box.close();
@@ -150,7 +150,7 @@ function furnish(ctx) {
       redraw();
       let ok = false;
       try {
-        await ctx.put('/api/town/house/items', { items: scene.items().map((i) => ({ item_id: i.item_id, x: i.x, y: i.y, flip: i.flip ? 1 : 0 })) });
+        await ctx.put('/house/items', { items: scene.items().map((i) => ({ item_id: i.item_id, x: i.x, y: i.y, flip: i.flip ? 1 : 0 })) });
         saved = key(scene.items());
         await ctx.refresh();
         say('Saved.');

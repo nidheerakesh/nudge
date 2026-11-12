@@ -36,7 +36,7 @@ export async function buy(ctx, id, qty) {
   if (bal(ctx) < it.price * n) { oops(ctx, { code: 'coins' }); return false; }
   try {
     const body = it.kind === 'food' ? { item: id, qty: n } : { item: id };
-    const r = await ctx.post('/api/town/buy', body);
+    const r = await ctx.post('/buy', body);
     if (r && typeof r.balance === 'number') ctx.me.balance = r.balance;
     await ctx.refresh();
     if (ctx.onBalance) ctx.onBalance(ctx.me.balance);
@@ -186,7 +186,7 @@ export function avatarPanel(ctx, o = {}) {
     redraw();
   };
   const wear = (patch) => run(async () => {
-    await ctx.put('/api/town/avatar', patch);
+    await ctx.put('/avatar', patch);
     await ctx.refresh();
   });
 

@@ -196,3 +196,26 @@ test('answering every check-in pays', async () => {
   assert.ok(v > 20 * 60);
   assert.equal(await awardForSession(db, 1, s), Math.floor(v / 60));
 });
+
+test('one active session at a time', async () => {
+  const db = mk();
+  const a = await sess(db, 1, 5);
+  const b = await sess(db, 1, 5);
+  await ping(db, 1, a, T0);
+  await code(ping(db, 1, b, T0 + 1000), 'busy');
+  assert.equal(await row(db, b), null);
+  await code(ping(db, 1, b, T0 + 120000), 'busy');
+  const o = await sess(db, 2, 5);
+  assert.equal((await ping(db, 2, o, T0 + 1000)).ok, 1);
+  await db.prepare("UPDATE sessions SET end_kind='done' WHERE id=?").bind(a).run();
+  assert.equal((await ping(db, 1, b, T0 + 130000)).ok, 1);
+});
+
+test('stale session does not block a new one', async () => {
+  const db = mk();
+  const a = await sess(db, 1, 5);
+  const b = await sess(db, 1, 5);
+  await ping(db, 1, a, T0);
+  assert.equal((await ping(db, 1, b, T0 + 200000)).ok, 1);
+  await code(ping(db, 1, a, T0 + 210000), 'busy');
+});
