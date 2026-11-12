@@ -574,7 +574,7 @@ function mount(c0) {
 
   async function start() {
     tctx.onBalance(me.balance);
-    pills.replaceChildren(coin, pill('Map', toggleMap, null, 'map'), chatPill, wardPill, housePill, pill('Settings', settings, null, 'gear'));
+    pills.replaceChildren(coin, pill('Map', toggleMap, null, 'map'), chatPill, wardPill, housePill, pill('Guide', () => lazy('/town/ui/guide.js', 'openGuide'), null, 'heart'), pill('Settings', settings, null, 'gear'));
     canvas = h('canvas', {
       role: 'img', tabindex: '0',
       'aria-label': 'Nudge Town. Use the arrow keys or tap to walk around. Walk to a door to knock.',
@@ -592,6 +592,9 @@ function mount(c0) {
     every(sendPos, TICK_MS);
     every(() => { presence(); if (map && !mapBox.hidden && town) { const p = town.player(); map.setPlayer({ district, x: p.x, y: p.y }); map.draw(); } }, PRESENCE_MS);
     await enterDistrict(me.plot.district);
+    let seen = true;
+    try { seen = !!localStorage.getItem('town_guide'); localStorage.setItem('town_guide', '1'); } catch (e) { /* storage blocked */ }
+    if (!seen && !dead()) lazy('/town/ui/guide.js', 'openGuide');
   }
 
   S.boot = async () => {
