@@ -43,5 +43,6 @@ export function d1(path = ':memory:') {
 export function v3(db) {
   db.exec(readFileSync(new URL('../migrations/v3/0001_init.sql', import.meta.url), 'utf8'));
   db.exec(readFileSync(new URL('../migrations/v3/0002_town.sql', import.meta.url), 'utf8'));
+  db.exec(readFileSync(new URL('../migrations/v3/0004_social.sql', import.meta.url), 'utf8'));
   return db;
 }
