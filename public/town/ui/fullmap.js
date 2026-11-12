@@ -89,7 +89,7 @@ export function openFullMap(ctx) {
     const lay = await ctx.layouts.load(want);
     if (want !== d) return;
     tpl = lay.tpl;
-    pname.textContent = lay.place ? lay.place.display : '';
+    pname.textContent = lay.place ? lay.place.name : '';
     where.hidden = !lay.place;
     info = { taken: [], owners: new Map() };
     try {

@@ -16,7 +16,7 @@ const good = (r) => TYPES.includes(r.osm_type) && Number.isFinite(Number(r.lat))
 function hitOf(r) {
   return {
     osm: r.osm_type + '/' + r.osm_id,
-    name: clean(r.name || String(r.display_name || '').split(',')[0], 40),
+    name: clean(r.name || String(r.display_name || '').split(',')[0], 60),
     display: clean(r.display_name, 120),
     lat: Number(r.lat),
     lon: Number(r.lon),

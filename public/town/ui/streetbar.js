@@ -44,14 +44,20 @@ export function createStreetBar({ ui, send, onErr }) {
   const btnStyle = { minHeight: '44px' }
   const emoteBtns = EMOTES.map(k => h('button', { class: 'k-btn', type: 'button', 'aria-label': 'Send ' + cap(k), style: btnStyle, onclick: () => emote(k) }, cap(k)))
 
+  const panel = h('div', { class: 'k-panel row', hidden: true, style: { padding: '8px', flexWrap: 'wrap', boxSizing: 'border-box', marginBottom: '6px' } },
+    h('div', { class: 'row', style: { flexWrap: 'nowrap', width: '100%' } }, input,
+      h('button', { class: 'k-btn pink', type: 'button', style: btnStyle, onclick: go }, 'Say')),
+    h('div', { class: 'row', style: { width: '100%', flexWrap: 'wrap' } }, ...emoteBtns),
+    note)
+  const tog = h('button', { class: 'k-pill', type: 'button', 'aria-expanded': 'false', style: { minHeight: '44px', pointerEvents: 'auto' }, onclick: () => {
+    panel.hidden = !panel.hidden
+    tog.setAttribute('aria-expanded', String(!panel.hidden))
+    if (!panel.hidden) input.focus()
+  } }, 'Say or wave')
   const el = h('div', {
-    class: 'k-panel row', hidden: true,
-    style: { position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: 'calc(8px + env(safe-area-inset-bottom, 0px))', zIndex: '4', width: 'calc(100% - 16px)', maxWidth: '420px', padding: '8px', flexWrap: 'wrap', boxSizing: 'border-box' },
-  },
-  h('div', { class: 'row', style: { flexWrap: 'nowrap', width: '100%' } }, input,
-    h('button', { class: 'k-btn pink', type: 'button', style: btnStyle, onclick: go }, 'Say')),
-  h('div', { class: 'row', style: { width: '100%', flexWrap: 'wrap' } }, ...emoteBtns),
-  note)
+    hidden: true,
+    style: { position: 'absolute', left: '8px', bottom: 'calc(8px + env(safe-area-inset-bottom, 0px))', zIndex: '4', width: 'calc(100% - 16px)', maxWidth: '340px' },
+  }, panel, tog)
 
   return {
     el,

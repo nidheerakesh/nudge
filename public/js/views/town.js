@@ -115,7 +115,7 @@ function mount(c0) {
     layouts,
     refresh: async () => { const m = await call('GET', '/me'); me = m; tctx.onBalance(m.balance, true); return m; },
     get: (p) => call('GET', p),
-    post: (p, b) => call('POST', p, b),
+    post: (p, b) => call('POST', p, b === undefined ? {} : b),
     put: (p, b) => call('PUT', p, b),
     del: (p, b) => call('DELETE', p, b),
     ui,
@@ -145,11 +145,11 @@ function mount(c0) {
   }, kicon(icon), h('span', { class: 'k-lbl' }, label));
 
   const placeTag = h('span', null);
-  const osmLink = h('a', { href: OSM, target: '_blank', rel: 'noopener', hidden: true }, '© OpenStreetMap contributors');
+  const osmLink = h('a', { href: OSM, target: '_blank', rel: 'noopener', hidden: true, 'aria-label': 'Map data © OpenStreetMap contributors' }, '© OpenStreetMap');
   const pbar = h('div', { class: 'k-pill small', hidden: true, style: { pointerEvents: 'auto' } }, placeTag, ' ', osmLink);
   const placeUpdate = () => {
     const p = lay && lay.place;
-    placeTag.textContent = p ? p.display : '';
+    placeTag.textContent = p ? p.name : '';
     pbar.hidden = !p;
     osmLink.hidden = !p;
   };
@@ -395,7 +395,7 @@ function mount(c0) {
       else ui.toast('Go back to the street first, then open Friends');
     } }, 'Join') : null;
     const dismiss = h('button', { class: 'k-btn', type: 'button', style: { minHeight: '44px' }, onclick: () => seenInvite(v) }, 'Dismiss');
-    invBanner = h('div', { class: 'k-panel row', role: 'status', style: { position: 'absolute', left: '50%', top: '60px', transform: 'translateX(-50%)', zIndex: '5', alignItems: 'center' } },
+    invBanner = h('div', { class: 'k-panel row', role: 'status', style: { position: 'absolute', left: '50%', top: '136px', transform: 'translateX(-50%)', zIndex: '5', alignItems: 'center', width: 'calc(100% - 16px)', maxWidth: '420px', padding: '8px', boxSizing: 'border-box' } },
       h('span', { class: 'grow' }, inviteText(v)), join, dismiss);
     el.append(invBanner);
   }
@@ -612,7 +612,7 @@ function mount(c0) {
         const nav = (d) => h('button', { class: 'btn', type: 'button', 'aria-label': d.label, onclick: d.fn }, d.t);
         list.append(nav({ t: 'Prev', label: 'Previous district', fn: () => travel(Math.max(0, district - 1)) }), nav({ t: 'Next', label: 'Next district', fn: () => travel(district + 1) }));
         const full = h('button', { class: 'btn', type: 'button', style: { marginTop: '6px', width: '100%' }, onclick: () => { mapBox.hidden = true; lazy('/town/ui/fullmap.js', 'openFullMap'); } }, 'Open full map');
-        mapBox.append(mapCv, list, full, osmLink);
+        mapBox.append(mapCv, list, full);
         map = createMinimap({ canvas: mapCv, count: Math.max(9, district + 4), current: district, onPick: (i) => travel(i), layout: lay && lay.tpl });
       }
       map.setCurrent(district);

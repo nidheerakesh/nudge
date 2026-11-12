@@ -432,6 +432,7 @@ a.badge{min-height:44px;padding:0 16px;background:var(--pop);color:var(--pop-ink
 }
 .k-btn[hidden]{display:none}
 .k-panel[hidden]{display:none}
+[hidden]{display:none !important}
 .k-btn:active{transform:translate(2px,2px);box-shadow:var(--shadow-press)}
 .k-btn.pink{background:var(--pop);color:var(--pop-ink)}
 .k-btn.mint{background:var(--ok);color:var(--accent-ink)}

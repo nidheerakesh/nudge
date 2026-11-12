@@ -109,7 +109,7 @@ export async function openHallScene(ctx) {
     scene.mine.ring = hasTimer ? 'active' : null
     if (overlay) overlay.remove()
     const kids = EMOTES.map(k => btn(ui, EMO_LABEL[k], () => { if (sock) sock.send({ t: 'emote', k }) }, 'ghost'))
-    kids.push(btn(ui, 'Study rooms', openStudy, 'ghost'))
+    kids.unshift(btn(ui, 'Study rooms', openStudy, 'ghost'))
     if (!hasTimer) kids.unshift(btn(ui, 'Start a focus timer', startTimer, 'primary'))
     overlay = bar(ui, kids)
     layer().append(overlay)
