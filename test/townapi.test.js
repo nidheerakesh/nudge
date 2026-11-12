@@ -333,3 +333,73 @@ test('new houses start medium sized', async () => {
   await call(env, 1, 'POST', '/api/town/join');
   assert.equal((await call(env, 1, 'GET', '/api/town/me')).j.house.size, 'house:medium');
 });
+
+const HIT = { osm_type: 'way', osm_id: 1077351803, name: 'IIIT Kottayam', display_name: 'IIIT Kottayam, Valavoor, Kerala, India', lat: '9.7554364', lon: '76.6495350' };
+const MAP = readFileSync(new URL('./fixtures/kottayam.json', import.meta.url), 'utf8');
+
+function mapFetch(env) {
+  env.FETCHER = async (url) => {
+    if (url.includes('nominatim')) return new Response(JSON.stringify([HIT]), { status: 200 });
+    if (url.includes('overpass')) return new Response('', { status: 502 });
+    return new Response(MAP, { status: 200 });
+  };
+  return env;
+}
+
+test('places search hides coordinates and a place moves the user into its district', async () => {
+  const env = mapFetch(mk());
+  const db = env.DB;
+  for (const u of [1, 2, 3]) await call(env, u, 'POST', '/api/town/join');
+  const s = await call(env, 1, 'GET', '/api/town/places', undefined, '?q=iiit%20kottayam');
+  assert.equal(s.s, 200);
+  assert.deepEqual(s.j.places, [{ osm: 'way/1077351803', name: 'IIIT Kottayam', display: 'IIIT Kottayam, Valavoor, Kerala, India' }]);
+  const a = await call(env, 1, 'POST', '/api/town/place', { q: 'iiit kottayam', osm: 'way/1077351803' });
+  assert.equal(a.s, 200);
+  assert.equal(a.j.place.name, 'IIIT Kottayam');
+  assert.deepEqual([a.j.plot.district, a.j.plot.slot], [1, 0]);
+  assert.equal(await db.prepare('SELECT place_id FROM districts WHERE n=1').first('place_id'), 1);
+  const b = await call(env, 2, 'POST', '/api/town/place', { q: 'iiit kottayam', osm: 'way/1077351803' });
+  assert.deepEqual([b.j.plot.district, b.j.plot.slot], [1, 1]);
+  const again = await call(env, 1, 'POST', '/api/town/place', { q: 'iiit kottayam', osm: 'way/1077351803' });
+  assert.deepEqual([again.j.plot.district, again.j.plot.slot], [1, 0]);
+  const d = await call(env, 3, 'GET', '/api/town/district/1');
+  assert.equal(d.j.place.name, 'IIIT Kottayam');
+  assert.ok(d.j.feat.bld.some((x) => x.n === 'Dining Hall'));
+  await db.prepare('INSERT INTO users(id,email,name,pw_hash,salt,created) VALUES(4,\'u4@x.io\',\'D\',\'h\',\'s\',0)').run();
+  const c = await call(env, 4, 'POST', '/api/town/join');
+  assert.equal(await db.prepare('SELECT 1 AS x FROM districts WHERE n=?').bind(c.j.plot.district).first(), null);
+  assert.equal((await call(env, 3, 'POST', '/api/town/plot', { district: 1, slot: 30 })).s, 400);
+});
+
+test('friends list shows incoming and outgoing requests', async () => {
+  const env = mk();
+  for (const u of [1, 2]) await call(env, u, 'POST', '/api/town/join');
+  assert.equal((await call(env, 2, 'POST', '/api/town/friends', { id: 1 })).j.status, 'pending');
+  const a = (await call(env, 1, 'GET', '/api/town/friends')).j;
+  assert.deepEqual(a.incoming.map((x) => x.id), [2]);
+  assert.deepEqual(a.outgoing, []);
+  const b = (await call(env, 2, 'GET', '/api/town/friends')).j;
+  assert.deepEqual(b.outgoing.map((x) => x.id), [1]);
+  assert.deepEqual(b.friends, []);
+});
+
+test('rooms lists six idle rooms when no room object is bound', async () => {
+  const env = mk();
+  const r = await call(env, 1, 'GET', '/api/town/rooms', undefined, '?district=0');
+  assert.equal(r.s, 200);
+  assert.deepEqual(r.j.rooms.map((x) => x.n), [1, 2, 3, 4, 5, 6]);
+  assert.ok(r.j.rooms.every((x) => x.cnt === 0 && x.phase === 'idle'));
+});
+
+test('deleteAccount removes friends, invites and presence rows', async () => {
+  const env = mk();
+  const db = env.DB;
+  await db.prepare("INSERT INTO friends(a,b,status) VALUES(1,2,'ok'),(3,1,'pending')").run();
+  await db.prepare("INSERT INTO invites(from_id,to_id,kind,ref) VALUES(1,2,'house','1'),(3,1,'room','x')").run();
+  await db.prepare("INSERT INTO presence(user_id,seen,st,district) VALUES(1,0,'idle',0),(2,0,'idle',0)").run();
+  await deleteAccount(db, 1);
+  assert.equal(await db.prepare('SELECT COUNT(*) c FROM friends WHERE a=1 OR b=1').first('c'), 0);
+  assert.equal(await db.prepare('SELECT COUNT(*) c FROM invites WHERE from_id=1 OR to_id=1').first('c'), 0);
+  assert.equal(await db.prepare('SELECT COUNT(*) c FROM presence WHERE user_id=1').first('c'), 0);
+  assert.equal(await db.prepare('SELECT COUNT(*) c FROM presence WHERE user_id=2').first('c'), 1);
+});

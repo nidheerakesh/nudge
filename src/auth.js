@@ -150,6 +150,9 @@ export async function deleteAccount(db, userId) {
   st.push(db.prepare('DELETE FROM reports WHERE reporter=?').bind(userId));
   st.push(db.prepare('DELETE FROM house_access WHERE house_user=? OR guest=?').bind(userId, userId));
   st.push(db.prepare('UPDATE town_plots SET user_id=NULL WHERE user_id=?').bind(userId));
+  st.push(db.prepare('DELETE FROM friends WHERE a=? OR b=?').bind(userId, userId));
+  st.push(db.prepare('DELETE FROM invites WHERE from_id=? OR to_id=?').bind(userId, userId));
+  st.push(db.prepare('DELETE FROM presence WHERE user_id=?').bind(userId));
   st.push(db.prepare('DELETE FROM users WHERE id=?').bind(userId));
   await db.batch(st);
 }
