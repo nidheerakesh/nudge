@@ -1,4 +1,5 @@
-import { TICK_MS, MAX_DISTRICT, MSG_RATE, MAX_VIOLATIONS, DIST_W, DIST_H, validateClient, speedOk, clampToDistrict, makePlayer, makeServer } from '../../public/town/shared/protocol.js'
+import { TICK_MS, MAX_DISTRICT, MSG_RATE, MAX_VIOLATIONS, DIST_W, DIST_H, CHAT_RATE_MS, validateClient, speedOk, clampToDistrict, makePlayer, makeServer } from '../../public/town/shared/protocol.js'
+import { clean } from '../../public/town/shared/filter.js'
 
 const REFRESH_MS = 15000
 const KNOCK_TTL = 60000
@@ -36,13 +37,13 @@ export class DistrictDO {
     let at = null
     try { at = ws.deserializeAttachment() } catch (e) {}
     if (!at || !at.p) return null
-    s = { p: at.p, hidden: !!at.hidden, hello: !!at.hello, at: this.now(), w: 0, n: 0, v: 0 }
+    s = { p: at.p, hidden: !!at.hidden, hello: !!at.hello, muted: !!at.muted, at: this.now(), w: 0, n: 0, v: 0, lc: 0 }
     this.m.set(ws, s)
     return s
   }
 
   save(ws, s) {
-    try { ws.serializeAttachment({ p: s.p, hidden: s.hidden, hello: s.hello }) } catch (e) {}
+    try { ws.serializeAttachment({ p: s.p, hidden: s.hidden, hello: s.hello, muted: s.muted }) } catch (e) {}
   }
 
   async fetch(req) {
@@ -53,7 +54,7 @@ export class DistrictDO {
     this.dn = parseInt(req.headers.get('x-district'), 10) || 0
     if (!(uid > 0)) return new Response('unauthorized', { status: 401 })
     const pair = new WebSocketPair()
-    await this.admit(pair[1], uid, name)
+    await this.admit(pair[1], uid, name, req.headers.get('x-muted') === '1')
     return new Response(null, { status: 101, webSocket: pair[0] })
   }
 
@@ -85,7 +86,7 @@ export class DistrictDO {
     return res
   }
 
-  async admit(ws, uid, name) {
+  async admit(ws, uid, name, muted) {
     let d = null
     try { d = await this.load(uid) } catch (e) {}
     if (!d || !d.look) {
@@ -105,7 +106,7 @@ export class DistrictDO {
       return
     }
     const p = makePlayer({ id: uid, name, look: d.look, x: DIST_W / 2, y: DIST_H / 2, dir: 'd', a: 'idle', st: 'idle', left: 0, act: d.act, vp: d.vp, m: d.m, fed: d.fed, course: d.course, place: 'street' })
-    const s = { p, hidden: !d.show, hello: false, at: this.now(), w: 0, n: 0, v: 0 }
+    const s = { p, hidden: !d.show, hello: false, muted: !!muted, at: this.now(), w: 0, n: 0, v: 0, lc: 0 }
     this.ctx.acceptWebSocket(ws)
     this.m.set(ws, s)
     this.save(ws, s)
@@ -182,6 +183,9 @@ export class DistrictDO {
       case 'emote':
         if (!s.hidden) this.bcast(makeServer('emote', { id: p.id, k: msg.k }), ws)
         break
+      case 'chat':
+        if (!s.hidden) this.chat(ws, s, msg.text, t)
+        break
       case 'timer':
         p.st = msg.st
         p.left = msg.left
@@ -206,6 +210,13 @@ export class DistrictDO {
         await this.reply(ws, s, msg.id, msg.allow, raw.later === true)
         break
     }
+  }
+
+  chat(ws, s, text, t) {
+    if (s.muted) return send(ws, makeServer('err', { code: 'muted' }))
+    if (t - s.lc < CHAT_RATE_MS) return
+    s.lc = t
+    this.bcast(makeServer('chat', { id: s.p.id, name: s.p.name, text: clean(text) }))
   }
 
   hello(ws, s) {
