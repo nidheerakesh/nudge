@@ -9,7 +9,7 @@ run_worker_first = ["/api/*"]
 [[d1_databases]]
 binding = "DB"
 database_name = "nudge-v3"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "3f671528-05ba-4658-8170-b1177b1158ac"
 migrations_dir = "migrations/v3"
 [ai]
 binding = "AI"
