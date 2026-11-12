@@ -103,3 +103,14 @@ test('makeServer builds every type', () => {
   assert.equal(P.makeServer('bogus', {}), null);
   for (const t of P.SERVER_TYPES) assert.ok(P.makeServer(t, {}), t);
 });
+
+test('round accepts whole minutes 10 to 90 only', () => {
+  for (const mins of [10, 25, 90]) assert.deepEqual(P.validateClient({ t: 'round', mins }), { t: 'round', mins });
+  for (const mins of [9, 91, 25.5, '25', undefined]) assert.equal(P.validateClient({ t: 'round', mins }), null, String(mins));
+  assert.equal(P.ROOM_MAX, 8);
+  assert.equal(P.ROUND_BREAK_MS, 300000);
+  assert.equal(P.ROOM_BONUS, 10);
+  assert.equal(P.ROOM_BONUS_MIN, 25);
+  assert.ok(P.CLIENT_TYPES.includes('round'));
+  assert.ok(P.SERVER_TYPES.includes('round'));
+});

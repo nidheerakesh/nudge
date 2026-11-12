@@ -9,6 +9,10 @@ export const MAX_VIOLATIONS = 3
 export const DIST_W = 56
 export const DIST_H = 44
 export const COORD_MAX = 60
+export const ROOM_MAX = 8
+export const ROUND_BREAK_MS = 300000
+export const ROOM_BONUS = 10
+export const ROOM_BONUS_MIN = 25
 
 export const DIRS = ['d', 'u', 'l', 'r']
 export const EMOTES = ['cheer', 'heart', 'wave', 'zzz', 'think', 'ok']
@@ -16,8 +20,8 @@ export const SHOPS = ['boutique', 'homestore', 'bakery', 'hall']
 export const TIMER_STATES = ['focus', 'break', 'idle']
 export const ACTS = ['active', 'idle', 'away']
 export const PLACES = ['street', 'house', 'hall']
-export const CLIENT_TYPES = ['hello', 'pos', 'emote', 'knock', 'reply', 'enter', 'shop', 'leave', 'chat', 'timer', 'mute', 'kick']
-export const SERVER_TYPES = ['snap', 'join', 'part', 'pos', 'emote', 'knock', 'result', 'inside', 'chat', 'err']
+export const CLIENT_TYPES = ['hello', 'pos', 'emote', 'knock', 'reply', 'enter', 'shop', 'leave', 'chat', 'timer', 'mute', 'kick', 'round']
+export const SERVER_TYPES = ['snap', 'join', 'part', 'pos', 'emote', 'knock', 'result', 'inside', 'chat', 'err', 'round']
 export const WHY = ['closed', 'away', 'declined', 'blocked', 'later']
 
 const isNum = v => typeof v === 'number' && Number.isFinite(v)
@@ -82,6 +86,8 @@ export function validateClient(msg) {
       case 'mute':
       case 'kick':
         return isId(msg.user) ? { t, user: msg.user } : null
+      case 'round':
+        return Number.isSafeInteger(msg.mins) && msg.mins >= 10 && msg.mins <= 90 ? { t, mins: msg.mins } : null
     }
     return null
   } catch (e) {
@@ -152,6 +158,11 @@ export function makeServer(type, d) {
       return { t: 'chat', id: o.id, name: String(o.name == null ? '' : o.name), text: o.text, ts: o.ts }
     case 'err':
       return { t: 'err', code: o.code }
+    case 'round': {
+      const res = { t: 'round', phase: o.phase, end: o.end, mins: o.mins, by: o.by }
+      if (o.coins) res.coins = o.coins
+      return res
+    }
   }
   return null
 }
