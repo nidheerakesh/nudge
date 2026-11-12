@@ -370,7 +370,7 @@ export async function openShopScene(ctx, kind) {
 
   const place = 'shop:' + kind
   const here = p => p && (p.place === place || (kind === 'homestore' && p.place === 'shop:home'))
-  const mine = ctx.me && ctx.me.id
+  const mine = ctx.uid || (ctx.me && ctx.me.id)
   function onMsg(m) {
     if (!m) return
     if (m.t === 'snap') scene.setMembers((m.players || []).filter(p => here(p) && p.id !== (m.you != null ? m.you : mine)))
@@ -379,6 +379,7 @@ export async function openShopScene(ctx, kind) {
     else if (m.t === 'pos') for (const e of m.list || []) { if (scene.others.has(e.id)) scene.member(e) }
   }
   if (ctx.net && typeof ctx.net.on === 'function') unsub = ctx.net.on(onMsg)
+  if (typeof ctx.players === 'function') scene.setMembers(ctx.players().filter(p => here(p) && p.id !== mine))
 
   let done
   const closed = new Promise(r => { done = r })

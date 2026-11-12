@@ -388,6 +388,14 @@ export function createTownScene({ engine, district = 0, plots = [], players = []
         if (x === doorTileXY.x && y === doorTileXY.y) continue
         block(x, y)
       }
+      const isDoor = (x, y) => (x === doorTileXY.x && y === doorTileXY.y) || (x === pt.door.x && y === pt.door.y)
+      for (let y = pt.y; y < pt.y + pt.h; y++) for (let x = pt.x; x < pt.x + pt.w; x++) {
+        if (isDoor(x, y)) continue
+        block(x, y)
+        if (x > pt.x && x < pt.x + pt.w - 1 && y > pt.y && y < pt.y + pt.h - 1) continue
+        const f = sprObj(y === pt.y || y === pt.y + pt.h - 1 ? 'fence.h' : 'fence.v', { x, y, w: 1, h: 1 })
+        if (f) addStatic(f)
+      }
       const target = { type: 'house', owner: rec.owner.id, door: doorTileXY }
       doorAt.set(key(doorTileXY.x, doorTileXY.y), target)
       doorAt.set(key(pt.door.x, pt.door.y), { type: 'house', owner: rec.owner.id, door: pt.door })

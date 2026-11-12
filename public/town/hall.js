@@ -55,7 +55,7 @@ export function createHallScene({ engine, me, onExit, onBoard }) {
 
 export async function openHallScene(ctx) {
   const { engine, ui } = ctx
-  const district = ctx.me && ctx.me.plot ? ctx.me.plot.district : 0
+  const district = Number.isInteger(ctx.district) ? ctx.district : ctx.me && ctx.me.plot ? ctx.me.plot.district : 0
   let left = false
   let boardSheet = null
   let boardTimer = null
@@ -184,7 +184,7 @@ export async function openHallScene(ctx) {
       message: m => {
         if (m.t === 'err') { fin(false); return }
         if (m.t === 'inside') {
-          const ms = (m.members || []).filter(p => p.id !== (ctx.me && ctx.me.id))
+          const ms = (m.members || []).filter(p => p.id !== (ctx.uid || (ctx.me && ctx.me.id)))
           if (!settled && ms.length >= CAP) { fin(false); return }
           members = ms
           if (settled) layout()

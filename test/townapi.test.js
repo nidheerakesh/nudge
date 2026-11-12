@@ -118,10 +118,12 @@ test('house style and door mode', async () => {
   assert.equal((await put({ name: '' })).s, 400);
   assert.equal((await put({ roof: 'wall:wood' })).s, 400);
   assert.equal((await put({ roof: 'roof:blue' })).s, 403);
-  assert.equal((await put({ size: 'house:small' })).s, 403);
-  await give(env, 1, 800);
-  await call(env, 1, 'POST', '/api/town/buy', { item: 'house:small' });
+  assert.equal((await put({ size: 'house:large' })).s, 403);
   assert.equal((await put({ size: 'house:small' })).j.house.size, 'house:small');
+  assert.equal((await put({ size: 'house:medium' })).j.house.size, 'house:medium');
+  await give(env, 1, 3500);
+  await call(env, 1, 'POST', '/api/town/buy', { item: 'house:large' });
+  assert.equal((await put({ size: 'house:large' })).j.house.size, 'house:large');
 });
 
 test('house items bounds, dup, ownership, replace', async () => {
@@ -129,7 +131,7 @@ test('house items bounds, dup, ownership, replace', async () => {
   await call(env, 1, 'POST', '/api/town/join');
   const put = (items) => call(env, 1, 'PUT', '/api/town/house/items', { items });
   assert.equal((await put([{ item_id: 'furn:desk', x: 5, y: 4 }])).s, 200);
-  for (const it of [{ item_id: 'furn:desk', x: 6, y: 0 }, { item_id: 'furn:desk', x: 0, y: 5 }, { item_id: 'furn:desk', x: -1, y: 0 }, { item_id: 'furn:desk', x: 1.5, y: 0 }]) {
+  for (const it of [{ item_id: 'furn:desk', x: 10, y: 0 }, { item_id: 'furn:desk', x: 0, y: 7 }, { item_id: 'furn:desk', x: -1, y: 0 }, { item_id: 'furn:desk', x: 1.5, y: 0 }]) {
     assert.deepEqual([(await put([it])).s, (await put([it])).j.error], [400, 'bounds']);
   }
   assert.equal((await put([{ item_id: 'furn:desk', x: 1, y: 1 }, { item_id: 'furn:bed', x: 1, y: 1 }])).j.error, 'dup');
@@ -324,4 +326,10 @@ test('move plot: free plot works, taken plot refused, old plot freed', async () 
     assert.equal((await call(env, 1, 'POST', '/api/town/plot', bad)).s, 400);
   }
   assert.equal((await call(env, 1, 'POST', '/api/town/plot', { district: 1, slot: 3 })).s, 200);
+});
+
+test('new houses start medium sized', async () => {
+  const env = mk();
+  await call(env, 1, 'POST', '/api/town/join');
+  assert.equal((await call(env, 1, 'GET', '/api/town/me')).j.house.size, 'house:medium');
 });

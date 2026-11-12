@@ -33,7 +33,7 @@ test('prices match the tables', () => {
   const want = {
     'outfit:hoodie': 100, 'outfit:school': 150, 'outfit:winter': 300, 'outfit:festival': 600, 'outfit:wizard': 900, 'outfit:space': 1200,
     'acc:hairclip': 60, 'acc:glasses': 100, 'acc:catears': 400, 'acc:bunnyears': 500, 'acc:headphones': 300,
-    'house:hut': 0, 'house:small': 600, 'house:medium': 1500, 'house:large': 3500, 'house:manor': 8000,
+    'house:hut': 0, 'house:small': 0, 'house:medium': 0, 'house:large': 3500, 'house:manor': 8000,
     'roof:thatch': 100, 'roof:purple': 200, 'wall:brick': 180, 'door:pink': 100, 'floor:carpet': 120, 'wallpaper:stars': 150,
     'furn:desk': 0, 'furn:guitar': 250, 'furn:fishtank': 300, 'furn:books': 50,
     'food:cookie': 10, 'food:ramen': 40, 'food:pizza': 30,

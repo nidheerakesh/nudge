@@ -111,6 +111,8 @@ export function createInteriorScene({ engine, house, items, members, me, onExit 
   let list = (items || []).filter(it => furnInfo(it.item_id || it.item)).map(norm)
   let editing = false
   let sit = null
+  let sleep = null
+  let wantSleep = -1
   let wait = false
   let noSit = null
   let clock = 0
@@ -184,6 +186,36 @@ export function createInteriorScene({ engine, house, items, members, me, onExit 
     return true
   }
   scene.sitting = () => !!sit
+  scene.sleeping = () => !!sleep
+  function bedSide(bi) {
+    const b = list[bi]
+    const m = info(b)
+    const cand = []
+    for (let x = b.x - 1; x <= b.x + m.w; x++) for (let y = b.y - 1; y <= b.y + m.h; y++) {
+      const edge = (x >= b.x && x < b.x + m.w) !== (y >= b.y && y < b.y + m.h)
+      if (edge && x >= 0 && y >= 1 && x < W && y < H && !blockedAt(x, y)) cand.push({ x, y })
+    }
+    cand.sort((p, q) => (Math.abs(p.x - mc.x) + Math.abs(p.y - mc.y)) - (Math.abs(q.x - mc.x) + Math.abs(q.y - mc.y)))
+    return cand[0] || null
+  }
+  function wake() {
+    if (!sleep) return
+    const s = sleep
+    sleep = null
+    mine.a = 'idle'
+    mc.x = s.sx
+    mc.y = s.sy
+  }
+  function sleepAt(bi) {
+    const b = list[bi]
+    const m = info(b)
+    sleep = { bi, sx: mc.x, sy: mc.y, cx: b.x + m.w / 2, cy: b.y + m.h / 2 }
+    mc.cancel()
+    wantSleep = -1
+    wait = engine && engine.input ? !!(engine.input.dir().x || engine.input.dir().y) : false
+    mine.a = 'sleep'
+    if (scene.onSleep) scene.onSleep(true)
+  }
 
   scene.update = dt => {
     clock += dt * 1000
@@ -194,11 +226,16 @@ export function createInteriorScene({ engine, house, items, members, me, onExit 
       if (!moving) wait = false
       if (moving && !wait) { stand(); if (scene.onSit) scene.onSit(false) } else return
     }
+    if (sleep) {
+      if (!moving) wait = false
+      if (moving && !wait) { wake(); if (scene.onSleep) scene.onSleep(false) } else return
+    }
     mc.update(dt, d)
     mine.a = mc.isMoving ? 'walk' : 'idle'
     const tx = Math.floor(mc.x), ty = Math.floor(mc.y)
     if (noSit && noSit !== tx + ':' + ty) noSit = null
-    if (!sit && !noSit && itemAt(tx, ty, m => m.name === 'chair') >= 0) sitAt(tx, ty)
+    if (wantSleep >= 0 && !mc.isMoving && list[wantSleep]) sleepAt(wantSleep)
+    if (!sit && !sleep && !noSit && itemAt(tx, ty, m => m.name === 'chair') >= 0) sitAt(tx, ty)
     if (!sit && tx === doorX && ty === H - 1 && scene.onExit) scene.onExit()
   }
 
@@ -220,6 +257,22 @@ export function createInteriorScene({ engine, house, items, members, me, onExit 
     if (editing) { if (scene.onCell) scene.onCell(x, y); return }
     if (x < 0 || y < 0 || x >= W || y >= H) return
     let to = { x, y }
+    wantSleep = -1
+    if (sleep) { wake(); if (scene.onSleep) scene.onSleep(false) }
+    const bi = itemAt(x, y, m => m.name === 'bed')
+    if (bi >= 0) {
+      const side = bedSide(bi)
+      if (!side) return
+      if (sit) { stand(); if (scene.onSit) scene.onSit(false) }
+      const f = { x: Math.floor(mc.x), y: Math.floor(mc.y) }
+      if (f.x === side.x && f.y === side.y) { sleepAt(bi); return }
+      wantSleep = bi
+      noSit = null
+      const pp = astar(grid, W, H, f, side, v => v === 0)
+      if (pp && pp.length) mc.setPath(pp.slice(1))
+      else wantSleep = -1
+      return
+    }
     const di = itemAt(x, y, m => m.name === 'desk')
     if (di >= 0) {
       const c = chairFor(di)
@@ -241,7 +294,7 @@ export function createInteriorScene({ engine, house, items, members, me, onExit 
   // ---- edit mode ----
   scene.editMode = on => {
     editing = !!on
-    if (editing) { stand(); mc.cancel(); mine.a = 'idle' }
+    if (editing) { stand(); wake(); mc.cancel(); mine.a = 'idle' }
     return editing
   }
   scene.items = () => list.map(it => ({ ...it }))
@@ -363,7 +416,24 @@ export function createInteriorScene({ engine, house, items, members, me, onExit 
       const q = interp.get(id, clock) || { x: p.x, y: p.y }
       av(p.look, p.name, q.x, q.y, p.dir || 'd', p.a === 'walk' ? 'walk' : p.a, 0)
     }
-    if (sit) av(mine.look, mine.name, sit.cx + 0.5, sit.cy + 1, 'd', 'sit_study', 0, (sit.cy + 1) * TILE + 1)
+    if (sleep) {
+      const bcv = avatarCell(mine.look, 'd', 'idle', t, true)
+      const bm = info(list[sleep.bi])
+      const key = (list[sleep.bi].y + bm.h) * TILE + 1
+      draws.push({ y: key, fn: () => {
+        ctx.save()
+        ctx.translate(sleep.cx * TILE, sleep.cy * TILE)
+        ctx.rotate(-Math.PI / 2)
+        if (bcv) drawSprite(ctx, bcv, 0, 12)
+        ctx.restore()
+        tag(ctx, mine.name, sleep.cx * TILE, sleep.cy * TILE - 18)
+        ctx.font = '8px monospace'
+        ctx.textAlign = 'center'
+        ctx.fillStyle = '#fff'
+        const k = still() ? 0 : Math.floor(clock / 500) % 3
+        ctx.fillText('z'.repeat(k + 1), sleep.cx * TILE + 8, sleep.cy * TILE - 6 - k * 3)
+      } })
+    } else if (sit) av(mine.look, mine.name, sit.cx + 0.5, sit.cy + 1, 'd', 'sit_study', 0, (sit.cy + 1) * TILE + 1)
     else av(mine.look, mine.name, mc.x, mc.y, mc.facing, mine.a, 0)
     draws.sort((a, b) => a.y - b.y)
     for (const d of draws) d.fn()

@@ -19,10 +19,12 @@ const SECTIONS = [
   ]],
   ['4. Build your house', [
     'You get a plot when you join. Tap House to open the editor.',
+    'Every house starts at a roomy 10x7 inside. The builder counter in the Home Store sells Large and Manor sizes with more room.',
+    'Houses sit inside a fenced plot. Only the owner\u2019s door and the knock tile are open, so nobody walks through other people\u2019s yards.',
     'Style: pick roof, walls, door, floor and wallpaper, name your house, and set the door (see below). Press Save.',
     'Furnish: buy furniture at the Home Store first. In the editor choose a piece from the tray, then tap a tile to place it. Tap a placed piece to Move, Flip or Delete it. You can place up to 40 pieces and need to keep the doorway clear. Press Save, then Done.',
     'Location: House > Location, or Map > Open full map, shows every plot in every district. Tap a free green plot and press Move my house here. Your furniture and style move with you.',
-    'Walk to your own door to go inside and see it.',
+    'Walk to your own door to go inside and see it. Tap a bed to climb in and sleep (zzz). Move or tap anywhere to wake up.',
   ]],
   ['5. Door settings', [
     'Knock: visitors knock and you choose whether to let them in. Open: anyone can walk in. Closed: nobody can enter.',

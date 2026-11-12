@@ -69,7 +69,7 @@ async function join(db, uid, uname) {
   }
   if (!p) throw fail(503, 'busy');
   await db.batch([
-    db.prepare('INSERT OR IGNORE INTO houses(user_id,plot_id) VALUES(?,?)').bind(uid, p.id),
+    db.prepare("INSERT OR IGNORE INTO houses(user_id,plot_id,size) VALUES(?,?,'house:medium')").bind(uid, p.id),
     db.prepare('INSERT OR IGNORE INTO avatar(user_id,name) VALUES(?,?)').bind(uid, uname ? String(uname).replace(CTRL, '').trim().slice(0, 24) || null : null),
   ]);
   return p;

@@ -29,6 +29,7 @@ export function createKnock({ ui, portrait, host }) {
   }
 
   const k = {
+    el: box,
     // visitor side
     waiting(name, onCancel) {
       clearWait()

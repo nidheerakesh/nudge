@@ -7,7 +7,7 @@ const tier = (p) => (p === 0 ? 'free' : p <= 150 ? 'common' : p <= 300 ? 'uncomm
 const GROUPS = {
   outfit: { casual: 0, hoodie: 100, sweater: 100, school: 150, overalls: 150, cozy: 200, sports: 200, summer: 200, cute: 250, raincoat: 250, pajamas: 250, winter: 300, formal: 400, traditional: 450, explorer: 500, festival: 600, wizard: 900, space: 1200 },
   acc: { hairclip: 60, cap: 80, beanie: 80, hairbow: 80, glasses: 100, beret: 120, scarf: 120, backpack: 150, hat: 150, sunglasses: 150, flowercrown: 250, headphones: 300, catears: 400, bunnyears: 500 },
-  house: { hut: 0, small: 600, medium: 1500, large: 3500, manor: 8000 },
+  house: { hut: 0, small: 0, medium: 0, large: 3500, manor: 8000 },
   roof: { red: 0, thatch: 100, blue: 150, purple: 200 },
   wall: { plaster: 0, wood: 120, brick: 180 },
   door: { wood: 0, green: 80, blue: 80, pink: 100 },

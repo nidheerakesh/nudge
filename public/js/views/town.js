@@ -63,6 +63,8 @@ function mount(c0) {
   let pendT = 0;
   let wasMoving = false;
   let lastPos = null;
+  let inside = null;
+  const SKEY = 'town_state';
   let lastKey = null;
   let houseOwner = 0;
   let houseFails = 0;
@@ -110,6 +112,9 @@ function mount(c0) {
     del: (p, b) => call('DELETE', p, b),
     ui,
     get engine() { return engine; },
+    get district() { return district; },
+    get uid() { return uid(); },
+    players: () => [...seen.values()],
     get net() { return net; },
     toast: (m, o) => ui.toast(m, o),
     returnToStreet: () => returnToStreet(),
@@ -236,14 +241,27 @@ function mount(c0) {
     presence();
   }
 
-  async function enterDistrict(n) {
+  function persist() {
+    try {
+      const p = mode === 'street' && town ? town.player() : lastPos;
+      sessionStorage.setItem(SKEY, JSON.stringify({ d: district, x: p ? p.x : null, y: p ? p.y : null, in: inside }));
+    } catch (e) { /* storage blocked */ }
+  }
+  function saved() {
+    try {
+      const s = JSON.parse(sessionStorage.getItem(SKEY) || 'null');
+      return s && typeof s === 'object' ? s : null;
+    } catch (e) { return null; }
+  }
+
+  async function enterDistrict(n, spawn) {
     if (net) { net.close(); net = null; }
     seen.clear();
     district = n;
     try { plots = (await tctx.get('/plots?district=' + n)).plots || []; } catch (e) { plots = []; }
     if (dead()) return;
     for (const p of plots) if (p.owner) names.set(p.owner.id, p.owner.name);
-    buildTown();
+    buildTown(spawn);
     if (map) { map.setCurrent(n); map.draw(); }
     connectDistrict();
   }
@@ -371,6 +389,8 @@ function mount(c0) {
     houseFails = 0;
     houseLost = false;
     if (town) lastPos = town.player();
+    inside = { k: 'house', owner };
+    persist();
     let info = null;
     try { info = await tctx.get('/house/' + owner); } catch (e) { info = null; }
     if (dead()) return;
@@ -431,6 +451,8 @@ function mount(c0) {
     if (dead() || mode === 'street') return;
     const was = mode;
     mode = 'street';
+    inside = null;
+    persist();
     if (was === 'shop' && net) net.send({ t: 'shop', kind: null });
     if (hnet) {
       hnet.send({ t: 'leave' });
@@ -454,6 +476,9 @@ function mount(c0) {
     const hall = kind === 'library' || kind === 'hall';
     if (!hall && !SHOP_KINDS.includes(kind)) return;
     mode = 'shop';
+    if (town) lastPos = town.player();
+    inside = { k: hall ? 'hall' : 'shop', kind: hall ? 'hall' : kind };
+    persist();
     if (net) net.send({ t: 'shop', kind: hall ? 'hall' : kind });
     wasMoving = false;
     let ok = true;
@@ -583,7 +608,7 @@ function mount(c0) {
       style: { display: 'block', width: '100%', height: '100%', touchAction: 'none' },
     });
     el.replaceChildren(canvas, pills, banner, mapBox);
-    el.append(chat.el);
+    el.append(chat.el, knock.el);
     widget = createTimerWidget({ ui, store });
     widget.el.style.cssText += ';position:absolute;right:8px;bottom:8px;z-index:4';
     el.append(widget.el);
@@ -593,7 +618,18 @@ function mount(c0) {
     offStore = store.on(() => presence(true));
     every(sendPos, TICK_MS);
     every(() => { presence(); if (map && !mapBox.hidden && town) { const p = town.player(); map.setPlayer({ district, x: p.x, y: p.y }); map.draw(); } }, PRESENCE_MS);
-    await enterDistrict(me.plot.district);
+    every(persist, 1000);
+    const st = saved();
+    const okd = !!st && Number.isInteger(st.d) && st.d >= 0 && st.d <= 100000;
+    const okp = okd && Number.isFinite(st.x) && Number.isFinite(st.y) && st.x >= 0 && st.y >= 0 && st.x <= 60 && st.y <= 60;
+    lastPos = okp ? { x: st.x, y: st.y } : null;
+    await enterDistrict(okd ? st.d : me.plot.district, okp ? { x: st.x, y: st.y } : undefined);
+    const was = okd && st.in && typeof st.in === 'object' ? st.in : null;
+    if (was && !dead()) {
+      if (was.k === 'house' && Number.isInteger(was.owner)) enterHouse(was.owner);
+      else if (was.k === 'hall') onLandmark('hall');
+      else if (was.k === 'shop' && SHOP_KINDS.includes(was.kind)) onLandmark(was.kind);
+    }
     let seen = true;
     try { seen = !!localStorage.getItem('town_guide'); localStorage.setItem('town_guide', '1'); } catch (e) { /* storage blocked */ }
     if (!seen && !dead()) lazy('/town/ui/guide.js', 'openGuide');
@@ -615,6 +651,7 @@ function mount(c0) {
 
   S.destroy = () => {
     S.dying = true;
+    try { sessionStorage.removeItem(SKEY); } catch (e) { /* storage blocked */ }
     if (tctx.leaveScene) { try { tctx.leaveScene(); } catch (e) { /* scene already gone */ } }
     window.removeEventListener('resize', onResize);
     timers.forEach(clearInterval);
