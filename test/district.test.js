@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { d1, v3 } from './d1shim.js'
 import { DistrictDO } from '../src/town/district.js'
-import { TICK_MS, MAX_DISTRICT } from '../public/town/shared/protocol.js'
+import { TICK_MS, MAX_DISTRICT, CHAT_RATE_MS } from '../public/town/shared/protocol.js'
 
 function mkdb() {
   const db = d1()
@@ -336,4 +336,53 @@ test('TICK_MS is the alarm period', async () => {
   await join(1)
   await d.alarm()
   assert.equal(ctx.storage.alarm, 1000000 + TICK_MS)
+})
+
+test('chat reaches sender and others with id, name and text', async () => {
+  const { join, msg, last } = await setup()
+  const a = await join(1)
+  const b = await join(2)
+  await msg(a, { t: 'chat', text: 'hello there' })
+  assert.deepEqual(last(a, 'chat'), { t: 'chat', id: 1, name: 'u1', text: 'hello there' })
+  assert.deepEqual(last(b, 'chat'), { t: 'chat', id: 1, name: 'u1', text: 'hello there' })
+})
+
+test('banned word in chat arrives masked', async () => {
+  const { join, msg, last } = await setup()
+  const a = await join(1)
+  const b = await join(2)
+  await msg(a, { t: 'chat', text: 'oh shit' })
+  assert.equal(last(b, 'chat').text, 'oh ****')
+})
+
+test('two chats inside CHAT_RATE_MS deliver only the first', async () => {
+  const { join, msg, adv } = await setup()
+  const a = await join(1)
+  const b = await join(2)
+  await msg(a, { t: 'chat', text: 'one' })
+  await msg(a, { t: 'chat', text: 'two' })
+  assert.deepEqual(b.out.filter(o => o.t === 'chat').map(o => o.text), ['one'])
+  adv(CHAT_RATE_MS)
+  await msg(a, { t: 'chat', text: 'three' })
+  assert.deepEqual(b.out.filter(o => o.t === 'chat').map(o => o.text), ['one', 'three'])
+})
+
+test('muted socket gets err muted and nothing is broadcast', async () => {
+  const { d, join, msg, last } = await setup()
+  const a = sock()
+  await d.admit(a, 1, 'u1', true)
+  await msg(a, { t: 'hello' })
+  const b = await join(2)
+  await msg(a, { t: 'chat', text: 'hi' })
+  assert.equal(last(a, 'err').code, 'muted')
+  assert.equal(b.out.filter(o => o.t === 'chat').length, 0)
+})
+
+test('socket without hello cannot chat', async () => {
+  const { join, msg } = await setup()
+  const a = await join(1, false)
+  const b = await join(2)
+  await msg(a, { t: 'chat', text: 'hi' })
+  assert.equal(b.out.filter(o => o.t === 'chat').length, 0)
+  assert.equal(a.out.filter(o => o.t === 'chat').length, 0)
 })
