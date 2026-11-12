@@ -12,6 +12,7 @@ import { createKnock, whyText } from '/town/ui/knock.js';
 import { createChat } from '/town/ui/chat.js';
 import { createStreetBar } from '/town/ui/streetbar.js';
 import { kicon } from '/town/ui/icons.js';
+import { inviteText } from '/town/ui/friends.js';
 
 const PRESETS = [
   { skin: 1, hair: 1, hair_color: 1 }, { skin: 2, hair: 2, hair_color: 2 }, { skin: 3, hair: 3, hair_color: 3 },
@@ -124,6 +125,8 @@ function mount(c0) {
     players: () => [...seen.values()],
     get net() { return net; },
     toast: (m, o) => ui.toast(m, o),
+    report: (p) => reportUser(p),
+    block: (p) => blockUser(p),
     returnToStreet: () => returnToStreet(),
     enter: (i) => (mode === 'street' ? enterDistrict(i) : null),
     onBalance: (n, quiet) => {
@@ -252,7 +255,7 @@ function mount(c0) {
     });
     town.onDoor = onDoor;
     town.onLandmark = onLandmark;
-    town.onPlayer = (id) => { const p = seen.get(id); if (p && p.name) ui.toast(p.name); };
+    town.onPlayer = (id) => { const p = seen.get(id); if (id !== uid() && p && p.name) lazy('/town/ui/friends.js', 'openPlayerCard', { id, name: p.name }); };
     engine.setScene(town);
     lastKey = null;
     bar.show(mode === 'street');
@@ -364,6 +367,49 @@ function mount(c0) {
     if (net) net.send(msg);
     if (hnet) hnet.send(msg);
     if (town && mode === 'street') town.setMe({ st: s, left });
+  }
+
+  function sendPing() {
+    const t = store.timer();
+    const st = t ? (t.paused_at ? 'break' : 'focus') : 'idle';
+    tctx.post('/presence', { st, district }).catch(() => {});
+  }
+
+  let invBanner = null;
+  const shownInv = new Set();
+
+  function clearInvBanner() {
+    if (invBanner) invBanner.remove();
+    invBanner = null;
+  }
+
+  function seenInvite(v) {
+    clearInvBanner();
+    tctx.post('/invites/' + v.id + '/seen').catch(() => {});
+  }
+
+  function showInvite(v) {
+    const join = v.kind === 'house' ? h('button', { class: 'k-btn pink', type: 'button', style: { minHeight: '44px' }, onclick: () => {
+      seenInvite(v);
+      if (mode === 'street') enterHouse(v.from.id);
+      else ui.toast('Go back to the street first, then open Friends');
+    } }, 'Join') : null;
+    const dismiss = h('button', { class: 'k-btn', type: 'button', style: { minHeight: '44px' }, onclick: () => seenInvite(v) }, 'Dismiss');
+    invBanner = h('div', { class: 'k-panel row', role: 'status', style: { position: 'absolute', left: '50%', top: '60px', transform: 'translateX(-50%)', zIndex: '5', alignItems: 'center' } },
+      h('span', { class: 'grow' }, inviteText(v)), join, dismiss);
+    el.append(invBanner);
+  }
+
+  async function pollInvites() {
+    if (dead() || invBanner) return;
+    let d = null;
+    try { d = await tctx.get('/invites'); } catch (e) { return; }
+    if (dead() || invBanner || !d) return;
+    const bl = me.blocked || [];
+    const v = (d.invites || []).find((x) => !shownInv.has(x.id) && !bl.includes(x.from.id));
+    if (!v) return;
+    shownInv.add(v.id);
+    showInvite(v);
   }
 
   function sendPos() {
@@ -526,21 +572,23 @@ function mount(c0) {
   }
 
   // ---------- chat ----------
+  async function reportUser(p) {
+    try { await tctx.post('/report', { user: p.id, reason: 'abuse', text: '' }); ui.toast('Thanks, we will take a look'); } catch (e) { ui.toast('Could not send the report'); }
+  }
+  async function blockUser(p) {
+    try {
+      await tctx.post('/block', { user: p.id });
+      if (me && !me.blocked.includes(p.id)) me.blocked.push(p.id);
+      ui.toast(p.name + ' is blocked');
+    } catch (e) { ui.toast('Could not block'); }
+  }
   const chat = createChat({
     ui, host: el,
     selfId: uid,
     isOwner: () => houseOwner === uid(),
     send: (m) => (hnet ? hnet.send(m) : false),
-    onReport: async (p) => {
-      try { await tctx.post('/report', { user: p.id, reason: 'abuse', text: '' }); ui.toast('Thanks, we will take a look'); } catch (e) { ui.toast('Could not send the report'); }
-    },
-    onBlock: async (p) => {
-      try {
-        await tctx.post('/block', { user: p.id });
-        if (me && !me.blocked.includes(p.id)) me.blocked.push(p.id);
-        ui.toast(p.name + ' is blocked');
-      } catch (e) { ui.toast('Could not block'); }
-    },
+    onReport: reportUser,
+    onBlock: blockUser,
   });
 
   const bar = createStreetBar({
@@ -638,7 +686,7 @@ function mount(c0) {
 
   async function start() {
     tctx.onBalance(me.balance);
-    pills.replaceChildren(coin, pbar, pill('Map', toggleMap, null, 'map'), chatPill, wardPill, housePill, pill('Guide', () => lazy('/town/ui/guide.js', 'openGuide'), null, 'heart'), pill('Settings', settings, null, 'gear'));
+    pills.replaceChildren(coin, pbar, pill('Map', toggleMap, null, 'map'), chatPill, wardPill, housePill, pill('Guide', () => lazy('/town/ui/guide.js', 'openGuide'), null, 'heart'), pill('Friends', () => lazy('/town/ui/friends.js', 'openFriends'), null, 'party'), pill('Settings', settings, null, 'gear'));
     canvas = h('canvas', {
       role: 'img', tabindex: '0',
       'aria-label': 'Nudge Town. Use the arrow keys or tap to walk around. Walk to a door to knock.',
@@ -656,6 +704,10 @@ function mount(c0) {
     every(sendPos, TICK_MS);
     every(() => { presence(); if (map && !mapBox.hidden && town) { const p = town.player(); map.setPlayer({ district, x: p.x, y: p.y }); map.draw(); } }, PRESENCE_MS);
     every(persist, 1000);
+    every(sendPing, 60000);
+    sendPing();
+    every(pollInvites, 30000);
+    timers.push(setTimeout(pollInvites, 5000));
     const st = saved();
     const okd = !!st && Number.isInteger(st.d) && st.d >= 0 && st.d <= 100000;
     const okp = okd && Number.isFinite(st.x) && Number.isFinite(st.y) && st.x >= 0 && st.y >= 0 && st.x <= 60 && st.y <= 60;
@@ -693,6 +745,7 @@ function mount(c0) {
     window.removeEventListener('resize', onResize);
     timers.forEach(clearInterval);
     timers = [];
+    clearInvBanner();
     clearTimeout(pendT);
     if (offStore) offStore();
     if (widget) widget.destroy();
