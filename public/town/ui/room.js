@@ -61,6 +61,8 @@ export function openRooms(ctx) {
   const focusNote = h('p', { class: 'small' }, 'Start your own focus timer too, so your time counts.')
   const startRow = h('div', { class: 'row' },
     ...[25, 50].map(m => h('button', { class: 'btn primary', type: 'button', style: { minHeight: '44px' }, onclick: () => { if (sock) sock.send({ t: 'round', mins: m }) } }, 'Start ' + m + ' min')))
+  const invitePanel = h('div', { class: 'col', hidden: true, style: { gap: '8px' } })
+  const inviteBtn = h('button', { class: 'btn', type: 'button', style: { minHeight: '44px' }, onclick: () => loadInvite() }, 'Invite friends')
   const log = h('div', { role: 'log', 'aria-live': 'polite', 'aria-label': 'Room chat messages', class: 'col', style: { overflowY: 'auto', flex: '1 1 auto', minHeight: '80px', maxHeight: '28vh' } })
   const input = h('input', { type: 'text', maxlength: String(CHAT_MAX), placeholder: 'Say something kind', 'aria-label': 'Chat message', autocomplete: 'off', style: { flex: '1 1 auto', minHeight: '44px', minWidth: '0' } })
   const sendBtn = h('button', { class: 'btn', type: 'button', style: { minHeight: '44px' }, onclick: () => sendChat() }, 'Send')
@@ -74,7 +76,7 @@ export function openRooms(ctx) {
   const roomView = h('div', { class: 'col', style: { gap: '8px' } },
     h('div', { class: 'row', style: { alignItems: 'center' } }, head,
       h('button', { class: 'btn', type: 'button', style: { minHeight: '44px' }, onclick: () => showList() }, 'Leave room')),
-    who, clockEl, phaseEl, startRow, focusNote, log, chatRow)
+    who, clockEl, phaseEl, startRow, focusNote, inviteBtn, invitePanel, log, chatRow)
 
   function show(el) {
     body.replaceChildren(el)
@@ -135,6 +137,26 @@ export function openRooms(ctx) {
     const text = input.value.trim()
     if (!text || !sock || phase === 'focus') return
     if (sock.send({ t: 'chat', text: text.slice(0, CHAT_MAX) })) input.value = ''
+  }
+
+  async function sendRoomInvite(f) {
+    try {
+      await ctx.post('/invites', { to: f.id, kind: 'room', ref: 'room:' + district + ':' + num })
+      ctx.toast('Invite sent')
+    } catch (e) {
+      ctx.toast('Could not send the invite')
+    }
+  }
+
+  async function loadInvite() {
+    let d = null
+    try { d = await ctx.get('/friends') } catch (e) { d = null }
+    const on = d && Array.isArray(d.friends) ? d.friends.filter(f => f.online) : []
+    invitePanel.replaceChildren(...(on.length ? on.map(f => h('div', { class: 'item row', style: { alignItems: 'center' } },
+      h('span', { class: 'grow' }, f.name),
+      h('button', { class: 'btn', type: 'button', 'aria-label': 'Invite ' + f.name, style: { minHeight: '44px' }, onclick: () => sendRoomInvite(f) }, 'Invite'))) : [
+      h('p', { class: 'small muted', role: 'status' }, d ? 'No friends online' : 'Could not load friends')]))
+    invitePanel.hidden = false
   }
 
   function onRound(m) {

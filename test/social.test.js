@@ -150,15 +150,15 @@ test('invite validation', async () => {
 test('invite rate limit is 10 per minute', async () => {
   const db = mk();
   await befriend(db, 1, 2);
-  for (let i = 0; i < 10; i++) await social(db, 1, ['invites'], 'POST', { to: 2, kind: 'house', ref: 'h:' + i }, NOW);
-  await fails(social(db, 1, ['invites'], 'POST', { to: 2, kind: 'house', ref: 'h:x' }, NOW), 429, 'rate');
-  assert.deepEqual(await social(db, 1, ['invites'], 'POST', { to: 2, kind: 'house', ref: 'h:y' }, NOW + 61000), { ok: 1 });
+  for (let i = 0; i < 10; i++) await social(db, 1, ['invites'], 'POST', { to: 2, kind: 'house', ref: 'h:1' }, NOW);
+  await fails(social(db, 1, ['invites'], 'POST', { to: 2, kind: 'room', ref: 'r:x' }, NOW), 429, 'rate');
+  assert.deepEqual(await social(db, 1, ['invites'], 'POST', { to: 2, kind: 'house', ref: 'h:1' }, NOW + 61000), { ok: 1 });
 });
 
 test('seen hides an invite and expired invites are hidden', async () => {
   const db = mk();
   await befriend(db, 1, 2);
-  await social(db, 1, ['invites'], 'POST', { to: 2, kind: 'house', ref: 'h1' }, NOW);
+  await social(db, 1, ['invites'], 'POST', { to: 2, kind: 'house', ref: 'h:1' }, NOW);
   await social(db, 1, ['invites'], 'POST', { to: 2, kind: 'room', ref: 'r2' }, NOW);
   const g = await social(db, 2, ['invites'], 'GET', null, NOW);
   assert.equal(g.invites.length, 2);
@@ -185,4 +185,26 @@ test('unknown routes return null', async () => {
   assert.equal(await social(db, 1, ['presence'], 'GET', null, NOW), null);
   assert.equal(await social(db, 1, ['friends', '2', 'x', 'y'], 'GET', null, NOW), null);
   assert.equal(await social(db, 1, ['invites', '2'], 'POST', null, NOW), null);
+});
+
+test('house invite grants one hour of access', async () => {
+  const db = mk();
+  await befriend(db, 1, 2);
+  await social(db, 1, ['invites'], 'POST', { to: 2, kind: 'house', ref: 'h:1' }, NOW);
+  const row = await db.prepare('SELECT house_user, guest, expires FROM house_access WHERE house_user=? AND guest=?').bind(1, 2).first();
+  assert.deepEqual(row, { house_user: 1, guest: 2, expires: NOW + 3600000 });
+});
+
+test('house invite with another user ref is 400', async () => {
+  const db = mk();
+  await befriend(db, 1, 2);
+  await fails(social(db, 1, ['invites'], 'POST', { to: 2, kind: 'house', ref: 'h:2' }, NOW), 400, 'ref');
+  assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM house_access').first('n'), 0);
+});
+
+test('room invite creates no access row', async () => {
+  const db = mk();
+  await befriend(db, 1, 2);
+  await social(db, 1, ['invites'], 'POST', { to: 2, kind: 'room', ref: 'room:3:2' }, NOW);
+  assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM house_access').first('n'), 0);
 });

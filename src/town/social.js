@@ -100,12 +100,14 @@ async function sendInvite(db, uid, body, now) {
   const b = body || {};
   if (!KIND.includes(b.kind)) throw fail(400, 'kind');
   if (typeof b.ref !== 'string' || !REF.test(b.ref)) throw fail(400, 'ref');
+  if (b.kind === 'house' && b.ref !== 'h:' + uid) throw fail(400, 'ref');
   const t = pid(b.to);
   const f = await db.prepare("SELECT 1 AS x FROM friends WHERE status='ok' AND ((a=? AND b=?) OR (a=? AND b=?))").bind(uid, t, t, uid).first();
   if (!f) throw fail(403, 'friend');
   const cnt = await db.prepare("SELECT COUNT(*) AS n FROM invites WHERE from_id=? AND created >= datetime(?, 'unixepoch')").bind(uid, sec(now) - 60).first('n');
   if (cnt >= 10) throw fail(429, 'rate');
   await db.prepare("INSERT INTO invites(from_id,to_id,kind,ref,created) VALUES(?,?,?,?,datetime(?,'unixepoch'))").bind(uid, t, b.kind, b.ref, sec(now)).run();
+  if (b.kind === 'house') await db.prepare('INSERT OR REPLACE INTO house_access(house_user,guest,expires) VALUES(?,?,?)').bind(uid, t, now + 3600000).run();
   return { ok: 1 };
 }
 
