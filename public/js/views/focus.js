@@ -108,7 +108,7 @@ export default function view(root, ctx) {
       h('h3', null, 'How focused were you?'),
       h('div', { class: 'row' },
         ...[1, 2, 3, 4, 5].map(n => h('button', { class: 'btn', type: 'button', 'aria-label': 'Focus rating ' + n + ' of 5',
-          onclick: async () => { rate = null; await store.rateSession(id, n); } }, String(n))),
+          onclick: async () => { rate = null; try { await store.rateSession(id, n); } catch (e) { ui.toast('Could not save the rating.'); } } }, String(n))),
         h('button', { class: 'btn ghost', type: 'button', onclick: hide }, 'Skip')));
   }
 

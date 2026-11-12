@@ -392,6 +392,11 @@ async function inner(env, request, u, path, body) {
     const t = body && uid_(body.user);
     if (!t || t === uid || !(await exists(db, t))) throw fail(400, 'user');
     await db.prepare('INSERT OR IGNORE INTO user_blocks(blocker,blocked) VALUES(?,?)').bind(uid, t).run();
+    await db.prepare('DELETE FROM house_access WHERE (house_user=? AND guest=?) OR (house_user=? AND guest=?)').bind(uid, t, t, uid).run();
+    const dropIn = async (owner, gone) => {
+      try { await env.HOUSE.get(env.HOUSE.idFromName('h:' + owner)).fetch('https://do/drop', { headers: { 'x-drop': String(gone) } }); } catch { /* DO unavailable, access already revoked */ }
+    };
+    await Promise.all([dropIn(uid, t), dropIn(t, uid)]);
     return json({ ok: 1 });
   }
   if (a === 'block' && p.length === 2 && m === 'DELETE') {

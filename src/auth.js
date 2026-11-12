@@ -128,13 +128,16 @@ export async function logout(db, request) {
   await db.prepare('DELETE FROM auth_sessions WHERE token_hash=?').bind(await sha256hex(token)).run();
 }
 
-export async function changePassword(db, userId, oldPw, newPw) {
+export async function changePassword(db, userId, oldPw, newPw, request) {
   const row = await db.prepare('SELECT pw_hash, salt FROM users WHERE id=?').bind(userId).first();
   if (!row) return { error: 'invalid' };
   if (!(await verifyPassword(String(oldPw || ''), row.pw_hash, row.salt))) return { error: 'invalid' };
   if (!okPw(newPw)) return { error: 'weak_password' };
   const { hash, salt } = await hashPassword(newPw);
   await db.prepare('UPDATE users SET pw_hash=?, salt=? WHERE id=?').bind(hash, salt, userId).run();
+  const token = request ? readToken(request) : null;
+  const keep = token ? await sha256hex(token) : '';
+  await db.prepare('DELETE FROM auth_sessions WHERE user_id=? AND token_hash<>?').bind(userId, keep).run();
   return { ok: 1 };
 }
 

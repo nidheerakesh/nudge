@@ -385,6 +385,7 @@ export async function openShopScene(ctx, kind) {
   function leave() {
     if (left) return
     left = true
+    ctx.leaveScene = null
     if (overlay) overlay.remove()
     overlay = null
     if (typeof unsub === 'function') unsub()
@@ -392,6 +393,7 @@ export async function openShopScene(ctx, kind) {
     scene.destroy()
     Promise.resolve(ctx.returnToStreet()).finally(done)
   }
+  ctx.leaveScene = leave
 
   engine.setScene(scene)
   if (engine.camera && engine.camera.snap) engine.camera.snap()

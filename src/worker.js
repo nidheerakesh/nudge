@@ -9,10 +9,18 @@ export { HouseDO } from './town/house.js';
 
 const MAXBODY = 256 * 1024;
 
+const SEC = {
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'same-origin',
+  'x-frame-options': 'DENY',
+  'permissions-policy': 'camera=(), microphone=(), geolocation=()',
+  'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+};
+
 function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...headers },
+    headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...SEC, ...headers },
   });
 }
 
@@ -48,13 +56,24 @@ function todayOf(request) {
   return /^\d{4}-\d{2}-\d{2}$/.test(h) ? h : new Date().toISOString().slice(0, 10);
 }
 
+async function coachSlot(db, uid, now) {
+  const row = await db.prepare("SELECT v FROM prefs WHERE user_id=? AND k='coach_rl'").bind(uid).first();
+  const [t0, n] = row ? row.v.split(':').map(Number) : [0, 0];
+  const fresh = !(now - t0 < 60000);
+  if (!fresh && n >= 10) return false;
+  const v = (fresh ? now : t0) + ':' + (fresh ? 1 : n + 1);
+  await db.prepare("INSERT INTO prefs(user_id,k,v) VALUES(?,'coach_rl',?) ON CONFLICT(user_id,k) DO UPDATE SET v=excluded.v").bind(uid, v).run();
+  return true;
+}
+
 async function coach(env, request, u, body) {
   const ms = body && body.messages;
   if (!Array.isArray(ms) || !ms.length || ms.length > 20) throw fail(400, 'messages');
   for (const m of ms) {
-    if (!m || (m.role !== 'user' && m.role !== 'assistant') || typeof m.content !== 'string' || m.content.length > 2000) throw fail(400, 'messages');
+    if (!m || (m.role !== 'user' && m.role !== 'assistant') || typeof m.content !== 'string') throw fail(400, 'messages');
   }
-  const msgs = ms.map((m) => ({ role: m.role, content: m.content }));
+  const msgs = ms.map((m) => ({ role: m.role, content: m.content.slice(0, 2000) }));
+  if (!(await coachSlot(env.DB, u.id, Date.now()))) throw fail(429, 'slow_down');
   const data = await all(env.DB, u.id);
   try {
     return json(await ask(env, data, msgs, todayOf(request)));
@@ -74,7 +93,7 @@ async function route(env, request, u, path, body) {
     return json({ ok: 1 }, 200, { 'set-cookie': clearCookie() });
   }
   if (path === '/api/auth/password' && m === 'POST') {
-    const res = await changePassword(env.DB, u.id, body && body.old, body && body.new);
+    const res = await changePassword(env.DB, u.id, body && body.old, body && body.new, request);
     return res.error ? json({ error: res.error }, 400) : json(res);
   }
   if (path === '/api/auth/delete' && m === 'POST') {
@@ -119,6 +138,10 @@ async function route(env, request, u, path, body) {
 async function handle(request, env) {
   const path = new URL(request.url).pathname;
   if (!checkOrigin(request)) return json({ error: 'bad_origin' }, 403);
+  if ((request.headers.get('upgrade') || '').toLowerCase() === 'websocket') {
+    const o = request.headers.get('origin');
+    if (o && o !== new URL(request.url).origin) return json({ error: 'bad_origin' }, 403);
+  }
   const m = request.method;
   const body = m === 'POST' || m === 'PUT' || m === 'PATCH' ? await readBody(request) : null;
   if (m === 'POST' && (path === '/api/auth/signup' || path === '/api/auth/login')) return authRoute(env, request, path, body);

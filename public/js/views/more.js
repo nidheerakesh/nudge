@@ -22,6 +22,7 @@ function ago(s) {
 export default function view(root, ctx) {
   const { ui } = ctx;
   const { h, icon } = ui;
+  const oops = () => ui.toast('Something went wrong. Try again.');
   const sub = ctx.params.sub;
   const wrap = h('div', { class: 'wrap col' });
   root.append(wrap);
@@ -70,7 +71,7 @@ export default function view(root, ctx) {
       e.preventDefault();
       const t = name.value.trim();
       if (!t) return;
-      await ctx.add('habits', { name: t, per_week: pw });
+      try { await ctx.add('habits', { name: t, per_week: pw }); } catch (x) { oops(); }
     };
     el.append(h('form', { class: 'card col', onsubmit: save },
       ui.field('Habit', name), h('div', { class: 'col' }, h('span', { class: 'small' }, 'Days per week'), seg),
@@ -82,12 +83,12 @@ export default function view(root, ctx) {
     if (arc.length) el.append(h('details', { class: 'card' }, h('summary', null, 'Archived (' + arc.length + ')'),
       h('div', { class: 'list' }, arc.map(x => h('div', { class: 'item row' },
         h('span', { class: 'grow' }, x.name),
-        h('button', { class: 'btn', type: 'button', onclick: () => ctx.upd('habits', x.id, { archived: 0 }) }, 'Restore'),
+        h('button', { class: 'btn', type: 'button', onclick: () => ctx.upd('habits', x.id, { archived: 0 }).catch(oops) }, 'Restore'),
         h('button', { class: 'btn icon ghost', type: 'button', 'aria-label': 'Edit ' + x.name, onclick: () => editHabit(x) }, icon('edit')))))));
 
     function toggle(x, day) {
       const row = ctx.S.hlog.find(r => r.habit_id === x.id && r.day === day);
-      return row ? ctx.del('hlog', row.id) : ctx.add('hlog', { habit_id: x.id, day });
+      return (row ? ctx.del('hlog', row.id) : ctx.add('hlog', { habit_id: x.id, day })).catch(oops);
     }
 
     function card(x) {
@@ -129,13 +130,13 @@ export default function view(root, ctx) {
         h('button', { class: 'btn primary', type: 'button', onclick: async () => {
           const t = name.value.trim();
           if (!t) return;
-          await ctx.upd('habits', x.id, { name: t, per_week: pw });
+          try { await ctx.upd('habits', x.id, { name: t, per_week: pw }); } catch (e) { return oops(); }
           s.close();
         } }, 'Save'),
-        h('button', { class: 'btn', type: 'button', onclick: async () => { await ctx.upd('habits', x.id, { archived: x.archived ? 0 : 1 }); s.close(); } }, x.archived ? 'Restore' : 'Archive'),
+        h('button', { class: 'btn', type: 'button', onclick: async () => { try { await ctx.upd('habits', x.id, { archived: x.archived ? 0 : 1 }); } catch (e) { return oops(); } s.close(); } }, x.archived ? 'Restore' : 'Archive'),
         h('button', { class: 'btn danger', type: 'button', onclick: async () => {
           if (!await ui.confirmBox('Delete "' + x.name + '" and its history?', { ok: 'Delete', danger: true })) return;
-          await ctx.del('habits', x.id);
+          try { await ctx.del('habits', x.id); } catch (e) { return oops(); }
           s.close();
         } }, 'Delete')),
     ]);
@@ -148,7 +149,7 @@ export default function view(root, ctx) {
     const save = async () => {
       const b = ta.value.trim();
       if (!b) return;
-      await ctx.add('notes', { title: first(b).slice(0, 80), body: b });
+      try { await ctx.add('notes', { title: first(b).slice(0, 80), body: b }); } catch (e) { return oops(); }
       ta.value = '';
     };
     ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); } });
@@ -170,7 +171,7 @@ export default function view(root, ctx) {
             h('span', { class: 'col' }, h('b', null, n.title || first(n.body) || 'Untitled'),
               h('span', { class: 'row small muted' }, n.pinned ? h('span', { class: 'badge warn' }, 'Pinned') : null, c ? h('span', { class: 'badge' }, c.name) : null, ago(n.updated)))),
           h('button', { class: 'btn icon ghost', type: 'button', 'aria-pressed': String(!!n.pinned), 'aria-label': n.pinned ? 'Unpin note' : 'Pin note', style: { color: n.pinned ? 'var(--accent)' : 'var(--muted)' },
-            onclick: () => ctx.upd('notes', n.id, { pinned: n.pinned ? 0 : 1 }) }, icon('sparkle')));
+            onclick: () => ctx.upd('notes', n.id, { pinned: n.pinned ? 0 : 1 }).catch(oops) }, icon('sparkle')));
       }));
     };
     const srch = h('input', { type: 'search', placeholder: 'Search notes', 'aria-label': 'Search notes', value: q, oninput: e => { q = e.target.value; draw(); } });
@@ -188,14 +189,14 @@ export default function view(root, ctx) {
       ui.field('Title', title), ui.field('Note', body), ui.field('Course', sel),
       h('div', { class: 'row' },
         h('button', { class: 'btn primary', type: 'button', onclick: async () => {
-          await ctx.upd('notes', n.id, { title: title.value.trim(), body: body.value, course_id: sel.value ? Number(sel.value) : null, updated: new Date().toISOString().slice(0, 19).replace('T', ' ') });
+          try { await ctx.upd('notes', n.id, { title: title.value.trim(), body: body.value, course_id: sel.value ? Number(sel.value) : null, updated: new Date().toISOString().slice(0, 19).replace('T', ' ') }); } catch (e) { return oops(); }
           s.close();
         } }, 'Save'),
         h('button', { class: 'btn danger', type: 'button', onclick: async () => {
           const copy = { title: n.title, body: n.body, course_id: n.course_id, pinned: n.pinned };
-          await ctx.del('notes', n.id);
+          try { await ctx.del('notes', n.id); } catch (e) { return oops(); }
           s.close();
-          ui.toast('Note deleted', { action: 'Undo', onAction: () => ctx.add('notes', copy) });
+          ui.toast('Note deleted', { action: 'Undo', onAction: () => ctx.add('notes', copy).catch(oops) });
         } }, 'Delete')),
     ]);
   }

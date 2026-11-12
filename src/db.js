@@ -23,6 +23,20 @@ const strip = (row) => {
   return row;
 };
 
+const DAYS = ['due', 'date', 'day'];
+const MINS = ['mins', 'est', 'plan_mins', 'act_mins'];
+const okDay = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v) && !Number.isNaN(Date.parse(v.slice(0, 10)));
+
+function check(k, v) {
+  if (v === null) return;
+  if (typeof v === 'string' && v.length > 20000) throw err(400, 'value');
+  if (DAYS.includes(k) && !okDay(v)) throw err(400, 'value');
+  if ((k === 'time' || k === 'start') && !/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) throw err(400, 'value');
+  if (['start_at', 'done_at'].includes(k) && (typeof v !== 'string' || Number.isNaN(Date.parse(v)))) throw err(400, 'value');
+  if (MINS.includes(k) && !(Number.isInteger(v) && v >= 0 && v <= 1440)) throw err(400, 'value');
+  if (k === 'per_week' && !(Number.isInteger(v) && v >= 1 && v <= 7)) throw err(400, 'value');
+}
+
 function clean(table, body) {
   if (!Object.hasOwn(TABLES, table)) throw err(404, 'table');
   const cols = TABLES[table];
@@ -34,6 +48,7 @@ function clean(table, body) {
     let v = body[k];
     if (typeof v === 'boolean') v = v ? 1 : 0;
     if (v !== null && typeof v !== 'string' && typeof v !== 'number') throw err(400, 'value');
+    check(k, v);
     out[k] = v;
   }
   return out;
@@ -135,7 +150,7 @@ const LIM = {
 async function prefsOf(db, uid) {
   const res = await db.prepare('SELECT k, v FROM prefs WHERE user_id=?').bind(uid).all();
   const out = {};
-  for (const r of res.results) out[r.k] = r.v;
+  for (const r of res.results) if (r.k !== 'coach_rl') out[r.k] = r.v;
   return out;
 }
 
@@ -154,8 +169,14 @@ export async function all(db, uid) {
   return { user, prefs: await prefsOf(db, uid), ...(await dump(db, uid, true)) };
 }
 
+const TOWN = ['avatar', 'wardrobe', 'pantry', 'houses', 'house_items', 'coin_ledger', 'user_status'];
+
 export async function exportAll(db, uid) {
-  return { prefs: await prefsOf(db, uid), ...(await dump(db, uid, false)) };
+  const user = await db.prepare('SELECT id, email, name, created FROM users WHERE id=?').bind(uid).first();
+  const town = {};
+  for (const t of TOWN) town[t] = (await db.prepare(`SELECT * FROM ${t} WHERE user_id=?`).bind(uid).all()).results;
+  const timer = await getTimer(db, uid);
+  return { user, prefs: await prefsOf(db, uid), ...(await dump(db, uid, false)), timer, town };
 }
 
 export async function setPrefs(db, uid, obj) {
@@ -163,7 +184,7 @@ export async function setPrefs(db, uid, obj) {
   const ents = Object.entries(obj);
   const st = [];
   for (const [k, v] of ents) {
-    if (!/^[a-z_]{1,32}$/.test(k)) throw err(400, 'key');
+    if (!/^[a-z_]{1,32}$/.test(k) || k === 'coach_rl') throw err(400, 'key');
     const s = typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v);
     if (s.length > 4000) throw err(400, 'value');
     if (k === 'skin' && !['bubblegum', 'matcha', 'peach', 'starlight'].includes(s)) throw err(400, 'value');

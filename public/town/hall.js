@@ -157,6 +157,7 @@ export async function openHallScene(ctx) {
   function leave() {
     if (left) return
     left = true
+    ctx.leaveScene = null
     if (boardSheet && boardSheet.close) boardSheet.close()
     if (boardTimer) clearInterval(boardTimer)
     if (overlay) overlay.remove()
@@ -194,6 +195,7 @@ export async function openHallScene(ctx) {
     })
   })
   if (!joined) { refuse(); return closed }
+  ctx.leaveScene = leave
   layout()
   scene.onPos = null
   engine.setScene(scene)

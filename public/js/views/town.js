@@ -47,7 +47,7 @@ function mount(c0) {
   const { h } = c0.ui;
   const ui = c0.ui;
   const store = c0.store;
-  const dead = () => st !== S;
+  const dead = () => st !== S || S.dying;
 
   let me = null;
   let engine = null;
@@ -609,6 +609,8 @@ function mount(c0) {
   };
 
   S.destroy = () => {
+    S.dying = true;
+    if (tctx.leaveScene) { try { tctx.leaveScene(); } catch (e) { /* scene already gone */ } }
     window.removeEventListener('resize', onResize);
     timers.forEach(clearInterval);
     timers = [];

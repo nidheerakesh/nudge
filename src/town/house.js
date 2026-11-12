@@ -38,6 +38,14 @@ export class HouseDO {
   }
 
   async fetch(req) {
+    if (new URL(req.url).pathname === '/drop') {
+      const gone = parseInt(req.headers.get('x-drop'), 10)
+      for (const w of this.all()) {
+        const o = this.st(w)
+        if (o && o.uid === gone && !o.owner) this.drop(w, 4003, 'blocked')
+      }
+      return new Response('ok')
+    }
     if (req.headers.get('Upgrade') !== 'websocket') return new Response('expected websocket', { status: 426 })
     const uid = parseInt(req.headers.get('x-uid'), 10)
     let name = ''

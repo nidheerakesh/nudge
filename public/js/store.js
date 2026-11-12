@@ -55,6 +55,13 @@ export function parseHash(hash) {
   return { tab, params };
 }
 
+function syncLook(p) {
+  if (!p || typeof document === 'undefined') return;
+  const d = document.documentElement.dataset;
+  if (SKINS.includes(p.skin) && p.skin !== d.skin) applySkin(p.skin);
+  if (['light', 'dark', 'system'].includes(p.theme) && p.theme !== (d.theme || 'system')) applyTheme(p.theme);
+}
+
 export async function load() {
   busy++;
   const g = gen;
@@ -62,6 +69,7 @@ export async function load() {
     const res = await api('/api/all');
     if (g !== gen) return;
     for (const k in res) S[k] = res[k];
+    syncLook(res.prefs);
     emit();
   } finally { busy--; }
 }
