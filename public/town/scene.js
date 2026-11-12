@@ -112,8 +112,8 @@ function mkCanvas(w, h) {
 }
 
 const textCache = new Map()
-function textCv(text, fg, bg, edge) {
-  const s = String(text == null ? '' : text).toUpperCase().slice(0, 14)
+function textCv(text, fg, bg, edge, max = 14) {
+  const s = String(text == null ? '' : text).toUpperCase().slice(0, max)
   const key = s + '|' + fg + '|' + bg + '|' + edge
   let cv = textCache.get(key)
   if (cv) return cv
@@ -245,6 +245,44 @@ function buildHouse(look, night) {
     const s = spr(p.sprite)
     if (s) g.drawImage(s, p.x, p.y)
   }
+  return cv
+}
+
+export function wrapSay(text) {
+  const s = String(text == null ? '' : text).trim()
+  let rest = s.length > 60 ? s.slice(0, 57) + '...' : s
+  const out = []
+  while (rest && out.length < 2) {
+    if (rest.length <= 30) { out.push(rest); rest = ''; break }
+    let cut = rest.lastIndexOf(' ', 30)
+    if (cut <= 0) cut = 30
+    out.push(rest.slice(0, cut).trimEnd())
+    rest = rest.slice(cut).trimStart()
+  }
+  if (rest) out[out.length - 1] = out[out.length - 1].slice(0, 27) + '...'
+  return out
+}
+
+const sayCache = new Map()
+function sayCv(lines) {
+  const key = lines.join('|')
+  let cv = sayCache.get(key)
+  if (cv) return cv
+  const rows = lines.map(l => textCv(l, '#2A1F2D', '#FFFFFF', '#FFFFFF', 30))
+  const w = Math.max(...rows.map(r => r.width)) + 4
+  const h = rows.length * 9 + 4
+  cv = mkCanvas(w, h)
+  const g = cv.getContext('2d')
+  g.fillStyle = '#FFFFFF'
+  g.fillRect(0, 0, w, h)
+  g.fillStyle = '#2A1F2D'
+  g.fillRect(1, 0, w - 2, 1)
+  g.fillRect(1, h - 1, w - 2, 1)
+  g.fillRect(0, 1, 1, h - 2)
+  g.fillRect(w - 1, 1, 1, h - 2)
+  rows.forEach((r, i) => g.drawImage(r, 2, 2 + i * 9))
+  if (sayCache.size > 200) sayCache.clear()
+  sayCache.set(key, cv)
   return cv
 }
 
@@ -503,6 +541,12 @@ export function createTownScene({ engine, district = 0, layout = null, plots = [
     const p = id === selfId ? mine : others.get(id)
     if (p) p.emote = { k, until: clock + ms / 1000 }
   }
+  scene.say = (id, text) => {
+    const p = id === selfId ? mine : others.get(id)
+    if (!p) return
+    const lines = wrapSay(text)
+    p.say = lines.length ? { lines, until: clock + 5 } : null
+  }
   scene.knock = (ownerId, ms = 2500) => { bells.set(ownerId, clock + ms / 1000) }
   scene.setPlots = list => {
     plots = list || []
@@ -597,8 +641,10 @@ export function createTownScene({ engine, district = 0, layout = null, plots = [
       o.moving = Math.abs(dx) + Math.abs(dy) > 0.03
       if (Math.abs(dx) + Math.abs(dy) > 8) { o.x = o.tx; o.y = o.ty } else { o.x += dx * lerp; o.y += dy * lerp }
       if (o.emote && o.emote.until < clock) o.emote = null
+      if (o.say && o.say.until < clock) o.say = null
     }
     if (mine.emote && mine.emote.until < clock) mine.emote = null
+    if (mine.say && mine.say.until < clock) mine.say = null
     hourT += dt
     if (hourSet == null && hourT > 1) {
       hourT = 0
@@ -730,6 +776,11 @@ export function createTownScene({ engine, district = 0, layout = null, plots = [
       const cv = textCv(p.name, '#FFFFFF', '#2A1F2D', '#2A1F2D')
       ctx.drawImage(cv, Math.round(x - cv.width / 2), top - cv.height)
       top -= cv.height + 1
+    }
+    if (p.say) {
+      const b = sayCv(p.say.lines)
+      ctx.drawImage(b, Math.round(x - b.width / 2), top - b.height - 1)
+      top -= b.height + 1
     }
     if (p.st === 'focus') {
       const frac = p.m > 0 ? clamp(1 - p.left / (p.m * 60)) : 1
