@@ -1,6 +1,7 @@
 import { TILE } from './engine.js'
 import { connect } from './net.js'
 import { createRoom, spriteOf, layer, bar, btn } from './shops.js'
+import { openRooms } from './ui/room.js'
 
 const W = 24
 const H = 16
@@ -59,6 +60,7 @@ export async function openHallScene(ctx) {
   let left = false
   let boardSheet = null
   let boardTimer = null
+  let rooms = null
   let overlay = null
   let sock = null
   let members = []
@@ -107,6 +109,7 @@ export async function openHallScene(ctx) {
     scene.mine.ring = hasTimer ? 'active' : null
     if (overlay) overlay.remove()
     const kids = EMOTES.map(k => btn(ui, EMO_LABEL[k], () => { if (sock) sock.send({ t: 'emote', k }) }, 'ghost'))
+    kids.push(btn(ui, 'Study rooms', openStudy, 'ghost'))
     if (!hasTimer) kids.unshift(btn(ui, 'Start a focus timer', startTimer, 'primary'))
     overlay = bar(ui, kids)
     layer().append(overlay)
@@ -154,11 +157,17 @@ export async function openHallScene(ctx) {
     boardTimer = setInterval(fill, 30000)
   }
 
+  function openStudy() {
+    if (rooms) rooms.close()
+    rooms = openRooms(ctx)
+  }
+
   function leave() {
     if (left) return
     left = true
     ctx.leaveScene = null
     if (boardSheet && boardSheet.close) boardSheet.close()
+    if (rooms) rooms.close()
     if (boardTimer) clearInterval(boardTimer)
     if (overlay) overlay.remove()
     overlay = null
