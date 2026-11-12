@@ -152,13 +152,14 @@ function rects(bld) {
   for (const b of bld) {
     const xs = b.p.map(q => q[0]), ys = b.p.map(q => q[1])
     const minX = Math.min(...xs), minY = Math.min(...ys)
-    rs.push({
-      name: b.n, x: Math.round(minX), y: Math.round(minY),
-      w: cl(Math.max(...xs) - minX, 2, 7), h: cl(Math.max(...ys) - minY, 2, 5),
-    })
+    const bw = Math.max(...xs) - minX, bh = Math.max(...ys) - minY
+    const w = cl(bw, 2, 6), h = cl(bh, 2, 4)
+    rs.push({ name: b.n, x: Math.round(minX + bw / 2 - w / 2), y: Math.round(minY + bh / 2 - h / 2), w, h })
   }
   return rs.sort((a, b) => (!!b.name - !!a.name) || b.w * b.h - a.w * a.h || a.x - b.x || a.y - b.y)
 }
+
+const NUDGE = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2], [3, 0], [-3, 0], [0, 3], [0, -3]]
 
 const near = (a, b) => a.x < b.x + b.w + 1 && b.x < a.x + a.w + 1 && a.y < b.y + b.h + 1 && b.y < a.y + a.h + 1
 
@@ -174,7 +175,10 @@ function pick(rs, g, m) {
   const real = []
   for (const r of rs) {
     if (real.length >= m) break
-    if (okRect(r, g, real)) real.push(r)
+    for (const [dx, dy] of NUDGE) {
+      const q = { ...r, x: r.x + dx, y: r.y + dy }
+      if (okRect(q, g, real)) { real.push(q); break }
+    }
   }
   return real
 }
