@@ -179,3 +179,27 @@ test('payloads carry only ids, names, looks and timer state', async () => {
   await msg(a, { t: 'timer', st: 'focus', left: 10, title: 'Secret' })
   assert.ok(!JSON.stringify(a.out).includes('Secret'))
 })
+
+test('chat text is filtered before storing and broadcasting', async () => {
+  const { join, msg, last, store } = await setup()
+  const a = await join(1, true)
+  const b = await join(2)
+  await msg(b, { t: 'chat', text: 'well fuck' })
+  assert.equal(last(a, 'chat').text, 'well ****')
+  assert.equal(store.get('hist')[0].text, 'well ****')
+})
+
+test('muted socket cannot chat and gets err muted', async () => {
+  const { d, join, msg, last, adv, store } = await setup()
+  const a = await join(1, true)
+  const b = sock()
+  b.closed = null
+  await d.admit(b, 2, 'u2', false, false, false, true)
+  await msg(b, { t: 'chat', text: 'hello' })
+  assert.equal(last(b, 'err').code, 'muted')
+  assert.equal(a.out.filter(o => o.t === 'chat').length, 0)
+  assert.equal(store.get('hist'), undefined)
+  adv(1000)
+  await msg(a, { t: 'chat', text: 'ok' })
+  assert.equal(last(b, 'chat').text, 'ok')
+})
