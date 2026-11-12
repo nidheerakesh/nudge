@@ -404,7 +404,7 @@ export function createTownScene({ engine, district = 0, plots = [], players = []
         y: (bottom + 1) * T, x0: x0 * T, x1: (x0 + cols) * T, y0: top * T - 12, y1: (bottom + 1) * T,
         house: hc, hx: x0 * T, hy: top * T, cols, owner: rec.owner, door: doorTileXY, slot: pt.slot,
         chimney: cols >= 2 ? { x: x0 * T + cols * T - 22, y: top * T + 6 } : null,
-        label: plaque(rec.owner.name || '', (x0 + cols / 2) * T, top * T - 2),
+        label: plaque((rec.house && rec.house.name) || rec.owner.name || '', (x0 + cols / 2) * T, top * T - 2),
       }
       houses.push(o)
       addStatic(o)

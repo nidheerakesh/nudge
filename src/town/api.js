@@ -218,7 +218,7 @@ async function houseOf(db, me_, owner) {
 async function plots(db, me_, d) {
   const { results } = await db
     .prepare(
-      `SELECT p.slot, p.user_id, a.name, a.skin, a.hair, a.hair_color, a.outfit, a.accessory, h.size, h.roof, h.wall, h.door, h.door_mode FROM town_plots p
+      `SELECT p.slot, p.user_id, a.name, a.skin, a.hair, a.hair_color, a.outfit, a.accessory, h.name AS hname, h.size, h.roof, h.wall, h.door, h.door_mode FROM town_plots p
        JOIN avatar a ON a.user_id=p.user_id JOIN houses h ON h.user_id=p.user_id
        WHERE p.district=? AND p.user_id IS NOT NULL AND ${visible('p.user_id')}`,
     )
@@ -227,7 +227,7 @@ async function plots(db, me_, d) {
   const out = [];
   for (const r of results) {
     if (r.user_id !== me_ && (await blocked(db, me_, r.user_id))) continue;
-    out.push({ slot: r.slot, owner: { id: r.user_id, name: r.name, look: look(r) }, house: { ...HOUSE_LOOK(r), door_mode: r.door_mode } });
+    out.push({ slot: r.slot, owner: { id: r.user_id, name: r.name, look: look(r) }, house: { ...HOUSE_LOOK(r), name: r.hname, door_mode: r.door_mode } });
   }
   const tk = await db.prepare('SELECT slot FROM town_plots WHERE district=? AND user_id IS NOT NULL').bind(d).all();
   return { district: d, plots: out, taken: tk.results.map((r) => r.slot) };
