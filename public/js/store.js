@@ -110,10 +110,20 @@ export function applyTheme(t) {
   try { localStorage.setItem('theme', t || 'system'); } catch (e) { /* ignore */ }
 }
 
+export const SKINS = ['bubblegum', 'matcha', 'peach', 'starlight'];
+
+export function applySkin(s) {
+  if (typeof document === 'undefined') return;
+  const v = SKINS.includes(s) ? s : 'bubblegum';
+  document.documentElement.dataset.skin = v;
+  try { localStorage.setItem('skin', v); } catch (e) { /* ignore */ }
+}
+
 export async function setPrefs(obj) {
   await api('/api/prefs', { method: 'PUT', body: obj });
   for (const k in obj) S.prefs[k] = String(obj[k]);
   if ('theme' in obj) applyTheme(obj.theme);
+  if ('skin' in obj) applySkin(obj.skin);
   emit();
 }
 

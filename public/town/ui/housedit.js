@@ -99,13 +99,13 @@ function furnish(ctx) {
       inv.replaceChildren(...owned.map((id) => h('button', { class: 'k-chip' + (pick === id ? ' on' : ''), type: 'button', 'aria-pressed': String(pick === id), 'aria-label': 'Place ' + byId(id).name, style: { minHeight: '44px', flex: '0 0 auto' }, onclick: () => { pick = pick === id ? null : id; sel = -1; moving = false; say(pick ? 'Tap a tile to place ' + byId(id).name + '.' : ''); redraw(); } }, byId(id).name)));
       const b = (label, fn, dis) => h('button', { class: 'k-btn', type: 'button', 'aria-label': label, disabled: !!dis, style: { minHeight: '44px' }, onclick: fn }, label);
       const cur = sel >= 0 ? items[sel] : null;
-      tools.replaceChildren(
+      tools.replaceChildren(...[
         h('span', { class: 'badge' }, items.length + '/' + MAX_ITEMS),
         cur ? b(moving ? 'Tap new tile' : 'Move', () => { moving = !moving; say(moving ? 'Tap a tile to move it there.' : ''); redraw(); }) : null,
         cur ? b('Flip', () => reflip(), false) : null,
         cur ? b('Delete', () => { scene.remove(sel); sel = -1; moving = false; say('Removed.'); redraw(); }) : null,
         h('button', { class: 'k-btn pink', type: 'button', disabled: busy || !dirty(), style: { minHeight: '44px' }, onclick: save }, 'Save'),
-        b('Done', leave));
+        b('Done', leave)].filter(Boolean));
     };
     function reflip() {
       const it = scene.items()[sel];

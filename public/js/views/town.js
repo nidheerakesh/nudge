@@ -75,7 +75,7 @@ function mount(c0) {
   const seen = new Map();
   const names = new Map();
 
-  const el = h('div', { style: { position: 'relative', overflow: 'hidden', background: 'var(--bg)' } });
+  const el = h('div', { class: 'town-frame', style: { position: 'relative', overflow: 'hidden', background: 'var(--bg)' } });
   const pills = h('div', { class: 'k-hud', style: { position: 'absolute', left: '8px', right: '8px', top: '8px', zIndex: '4', pointerEvents: 'none' } });
   const banner = h('div', { class: 'k-panel small', role: 'status', hidden: true, style: { position: 'absolute', left: '8px', right: '8px', top: '60px', zIndex: '3' } });
   S.el = el;

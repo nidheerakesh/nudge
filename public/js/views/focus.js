@@ -175,7 +175,7 @@ export default function view(root, ctx) {
     out.push(h('div', { class: 'card col' }, h('h3', null, 'This week'),
       h('div', { class: 'chart' }, ...week.map((v, i) => h('span', {
         title: DN[i] + ': ' + ui.fmtMins(v), style: { height: Math.max(2, v / mx * 100) + '%', opacity: store.addDays(mon, i) === day ? '1' : '0.55' } }))),
-      h('div', { class: 'grid7 small muted', style: { textAlign: 'center' } },
+      h('div', { class: 'grid7 lbl small muted', style: { textAlign: 'center' } },
         ...week.map((v, i) => h('div', { style: { fontWeight: store.addDays(mon, i) === day ? '700' : '400', color: store.addDays(mon, i) === day ? 'var(--fg)' : '' } },
           DN[i], h('div', null, v === mx && v > 0 ? ui.fmtMins(v) : ' '))))));
     const bc = new Map();

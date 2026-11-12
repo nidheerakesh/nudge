@@ -114,6 +114,9 @@ test('prefs validation and notes updated', async () => {
   assert.deepEqual(r.prefs, { day_start: '09:00', focus_mins: '45' });
   await rej(setPrefs(db, 1, { 'Bad-Key': 1 }), 400, 'key');
   await rej(setPrefs(db, 1, { k: 'x'.repeat(4001) }), 400, 'value');
+  await rej(setPrefs(db, 1, { skin: 'nope' }), 400, 'value');
+  await setPrefs(db, 1, { skin: 'matcha' });
+  assert.equal((await all(db, 1)).prefs.skin, 'matcha');
   const [n] = await insert(db, 1, 'notes', { body: 'a', updated: '2000-01-01 00:00:00' });
   const p = await patch(db, 1, 'notes', n.id, { body: 'b' });
   assert.notEqual(p.updated, '2000-01-01 00:00:00');

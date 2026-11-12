@@ -212,6 +212,7 @@ async function start() {
 async function boot() {
   try {
     store.applyTheme(localStorage.getItem('theme') || 'system');
+    store.applySkin(localStorage.getItem('skin'));
   } catch (e) { /* ignore */ }
   window.addEventListener('nudge:auth', authScreen);
   window.addEventListener('hashchange', queue);

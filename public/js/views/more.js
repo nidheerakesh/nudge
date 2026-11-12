@@ -102,13 +102,13 @@ export default function view(root, ctx) {
           const on = logs.has(x.id + '|' + day);
           g.append(h('button', {
             type: 'button', disabled: day > td, 'aria-label': fmtDay(day) + (on ? ', done' : ', not done'), 'aria-pressed': String(on),
-            style: { padding: 0, cursor: 'pointer', background: on ? 'var(--accent)' : 'var(--card)', color: on ? 'var(--accent-fg)' : 'var(--muted)', borderColor: day === td ? 'var(--fg)' : 'var(--line)', borderWidth: day === td ? '2px' : '1px', opacity: day > td ? '.35' : '1' },
+            style: { padding: 0, cursor: 'pointer', background: on ? 'var(--accent)' : 'var(--card)', color: on ? 'var(--accent-fg)' : 'var(--text)', border: 'var(--lw) solid var(--ink)', textDecoration: day === td ? 'underline' : 'none', opacity: day > td ? '.35' : '1' },
             onclick: () => toggle(x, day),
-          }, String(pd(day).getDate())));
+          }, String(pd(day).getDate()), on ? icon('check') : null));
         }
         grid.append(g);
       }
-      return h('div', { class: 'card col' },
+      return h('div', { class: 'card col habit' },
         h('div', { class: 'row' }, h('b', { class: 'grow' }, x.name),
           h('span', { class: 'badge' + (cnt >= x.per_week ? ' ok' : '') }, cnt + '/' + x.per_week + ' this week'),
           h('button', { class: 'btn icon ghost', type: 'button', 'aria-label': 'Edit ' + x.name, onclick: () => editHabit(x) }, icon('edit'))),
@@ -168,7 +168,7 @@ export default function view(root, ctx) {
         return h('div', { class: 'item row' },
           h('button', { class: 'btn ghost grow', type: 'button', onclick: () => edit(n), style: { justifyContent: 'flex-start', textAlign: 'left' } },
             h('span', { class: 'col' }, h('b', null, n.title || first(n.body) || 'Untitled'),
-              h('span', { class: 'row small muted' }, c ? h('span', { class: 'badge' }, c.name) : null, ago(n.updated)))),
+              h('span', { class: 'row small muted' }, n.pinned ? h('span', { class: 'badge warn' }, 'Pinned') : null, c ? h('span', { class: 'badge' }, c.name) : null, ago(n.updated)))),
           h('button', { class: 'btn icon ghost', type: 'button', 'aria-pressed': String(!!n.pinned), 'aria-label': n.pinned ? 'Unpin note' : 'Pin note', style: { color: n.pinned ? 'var(--accent)' : 'var(--muted)' },
             onclick: () => ctx.upd('notes', n.id, { pinned: n.pinned ? 0 : 1 }) }, icon('sparkle')));
       }));
@@ -244,7 +244,7 @@ export default function view(root, ctx) {
           draw();
         } catch (e) { ui.toast('Could not add that'); }
       } }, a.done ? 'Added' : a.type === 'plan_day' ? 'Open planner' : 'Apply');
-      return h('div', { class: 'card row', style: { maxWidth: '90%' } }, h('span', { class: 'grow small' }, label), apply,
+      return h('div', { class: 'card row', style: { maxWidth: '90%' } }, h('span', { class: 'grow small', style: { flexBasis: '100%' } }, label), apply,
         a.done ? null : h('button', { class: 'btn ghost', type: 'button', onclick: () => { a.gone = 1; draw(); } }, 'Dismiss'));
     };
     const go = async t => {
@@ -281,6 +281,11 @@ export default function view(root, ctx) {
     el.append(h('div', { class: 'card col' }, h('h3', null, 'Appearance'),
       h('div', { class: 'seg', role: 'group', 'aria-label': 'Theme' }, [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) =>
         h('button', { type: 'button', class: v === th ? 'on' : '', 'aria-pressed': String(v === th), onclick: () => ctx.setPrefs({ theme: v }) }, l)))));
+    const sk = pf('skin', 'bubblegum');
+    el.lastChild.append(h('div', { class: 'col' }, h('h3', null, 'Skin'),
+      h('div', { class: 'skins', role: 'group', 'aria-label': 'Skin' }, [['bubblegum', 'Bubblegum'], ['matcha', 'Matcha'], ['peach', 'Peach Soda'], ['starlight', 'Starlight']].map(([v, l]) =>
+        h('div', { class: 'skin-opt' }, h('button', { type: 'button', class: 'skin-swatch' + (v === sk ? ' on' : ''), 'data-skin': v, 'aria-pressed': String(v === sk), 'aria-label': l + ' skin', onclick: () => ctx.setPrefs({ skin: v }) }),
+          h('span', { class: 'skin-cap', 'aria-hidden': 'true' }, l))))));
     const tm = (k, d, label) => h('input', { type: 'time', value: pf(k, d), 'aria-label': label, onchange: e => { if (e.target.value) ctx.setPrefs({ [k]: e.target.value }); } });
     const fm = Number(pf('focus_mins', 45)), bm = Number(pf('break_mins', 10));
     el.append(h('div', { class: 'card col' }, h('h3', null, 'Day planner'),

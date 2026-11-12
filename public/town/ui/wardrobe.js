@@ -70,7 +70,7 @@ export function mini(look, scale = 3) {
 export function makePreview(ctx, look, o = {}) {
   const { h } = ctx.ui;
   const sc = o.scale || 6;
-  const cv = h('canvas', { width: 16 * sc, height: 24 * sc, role: 'img', 'aria-label': 'Avatar preview', style: { imageRendering: 'pixelated', background: 'var(--bg)', borderRadius: '12px', border: '1px solid var(--line)' } });
+  const cv = h('canvas', { width: 16 * sc, height: 24 * sc, role: 'img', 'aria-label': 'Avatar preview', style: { imageRendering: 'pixelated', background: 'var(--bg)', borderRadius: '12px', border: 'var(--lw) solid var(--ink)' } });
   const g = cv.getContext('2d');
   const st = { look, anim: 'idle', dir: 'd', t: 0, frame: 0 };
   const dirs = ['d', 'l', 'u', 'r'];
@@ -257,6 +257,7 @@ export function avatarPanel(ctx, o = {}) {
 }
 
 export function openWardrobe(ctx) {
+  const { h } = ctx.ui;
   return new Promise((res) => {
     const p = avatarPanel(ctx, {});
     ctx.ui.sheet('Wardrobe', h('div', { class: 'k-panel col', style: { padding: '12px' } }, p.el), { onClose: () => { p.stop(); res(); } });

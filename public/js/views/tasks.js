@@ -150,7 +150,7 @@ export default function view(root, ctx) {
     draw();
   } }, 'Show done');
   draw();
-  root.append(h('div', { class: 'wrap col' }, h('h2', null, 'Tasks'), form,
+  root.append(h('div', { class: 'wrap col' }, form,
     h('div', { class: 'row' }, h('div', { class: 'grow' }, si), cfs, sd), list));
   if (again) { again = false; ti.focus(); }
 }

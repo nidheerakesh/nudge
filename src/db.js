@@ -166,6 +166,7 @@ export async function setPrefs(db, uid, obj) {
     if (!/^[a-z_]{1,32}$/.test(k)) throw err(400, 'key');
     const s = typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v);
     if (s.length > 4000) throw err(400, 'value');
+    if (k === 'skin' && !['bubblegum', 'matcha', 'peach', 'starlight'].includes(s)) throw err(400, 'value');
     st.push(db.prepare('INSERT INTO prefs(user_id,k,v) VALUES(?,?,?) ON CONFLICT(user_id,k) DO UPDATE SET v=excluded.v').bind(uid, k, s));
   }
   if (st.length) await db.batch(st);

@@ -215,8 +215,8 @@ export default function view(root, ctx) {
     h('button', { class: 'btn icon ghost', type: 'button', 'aria-label': 'Next day', onclick: () => go(addDays(day, 1)) }, icon('chevron')));
   const items = [...dayBlocks(), ...(prop ? prop.blocks : [])].sort((a, b) => toMin(a.start) - toMin(b.start));
   const tl = items.length ? h('div', { class: 'timeline' }, items.map(blockEl))
-    : ui.empty('Nothing planned for this day.', h('button', { class: 'btn primary', type: 'button', onclick: plan }, 'Plan my day'));
-  const bar = prop ? h('div', { class: 'card row', style: { position: 'sticky', bottom: '76px', zIndex: 5 } },
+    : ui.empty('Nothing planned for this day.');
+  const bar = prop ? h('div', { class: 'card row planbar' },
     h('strong', { class: 'grow' }, prop.blocks.length + (prop.blocks.length === 1 ? ' block proposed' : ' blocks proposed')),
     h('button', { class: 'btn', type: 'button', onclick: () => { prop = null; ctx.refresh(); } }, 'Discard'),
     prop.blocks.length ? h('button', { class: 'btn primary', type: 'button', onclick: accept }, 'Accept') : null) : null;

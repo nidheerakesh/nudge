@@ -109,9 +109,69 @@ export function chips(opts, val, onPick) {
     h('button', { class: 'chip' + (o.v === val ? ' on' : ''), type: 'button', 'aria-pressed': String(o.v === val), onclick: () => onPick(o.v) }, o.label)));
 }
 
+const MA = [
+  ['path', 'fur', 'M84 110c20 2 28-14 20-26-3-4-8-2-6 3 4 9-2 16-14 15z'],
+  ['ellipse', 'fur', 'cx', 60, 'cy', 106, 'rx', 28, 'ry', 18],
+  ['ellipse', 'fur', 'cx', 47, 'cy', 121, 'rx', 8, 'ry', 5],
+  ['ellipse', 'fur', 'cx', 73, 'cy', 121, 'rx', 8, 'ry', 5],
+  ['path', 'fur', 'M22 66c-2-16 2-28 6-36l2-12 16 12c8-2 20-2 28 0l16-12 2 12c4 8 8 20 6 36-2 20-18 28-38 28S24 86 22 66z'],
+  ['path', 'ear', 'm33.5 26 1 7.5 6.5-2.8zM86.5 26l-1 7.5-6.5-2.8z'],
+  ['path', 'line', 'M13 65l13 2.5M13 74l13-1.5M107 65l-13 2.5M107 74l-13-1.5'],
+  ['ellipse', 'eye', 'cx', 45, 'cy', 64, 'rx', 4.6, 'ry', 5.6],
+  ['ellipse', 'eye', 'cx', 75, 'cy', 64, 'rx', 4.6, 'ry', 5.6],
+  ['circle', 'shine', 'cx', 46.6, 'cy', 61.8, 'r', 1.7],
+  ['circle', 'shine', 'cx', 76.6, 'cy', 61.8, 'r', 1.7],
+  ['ellipse', 'blush', 'cx', 35, 'cy', 74, 'rx', 6.5, 'ry', 3.6],
+  ['ellipse', 'blush', 'cx', 85, 'cy', 74, 'rx', 6.5, 'ry', 3.6],
+  ['path', 'eye', 'M56.5 70h7L60 73.5z'],
+  ['path', 'line', 'M53.5 75.5q3.2 4 6.5 0 3.3 4 6.5 0'],
+];
+const MB = [
+  ['path', 'berry', 'M43 31c-2-13 8-25 17-27 9 2 19 14 17 27z'],
+  ['ellipse', 'seed', 'cx', 53, 'cy', 17, 'rx', 1.4, 'ry', 2],
+  ['ellipse', 'seed', 'cx', 67, 'cy', 17, 'rx', 1.4, 'ry', 2],
+  ['ellipse', 'seed', 'cx', 60, 'cy', 11, 'rx', 1.4, 'ry', 2],
+  ['ellipse', 'seed', 'cx', 60, 'cy', 23, 'rx', 1.4, 'ry', 2],
+  ['ellipse', 'seed', 'cx', 50.5, 'cy', 26, 'rx', 1.4, 'ry', 2],
+  ['ellipse', 'seed', 'cx', 69.5, 'cy', 26, 'rx', 1.4, 'ry', 2],
+  ['path', 'leaf', 'M37 33l8-6 4 5 6-6 5 6 5-6 6 6 4-5 8 6q-23 6-46 0z'],
+];
+const MS = {
+  fur: 'fill:var(--surface,#fff);stroke:var(--ink,#3b2a35);stroke-width:3;stroke-linejoin:round',
+  ear: 'fill:var(--pop,#ff6fa5)',
+  line: 'fill:none;stroke:var(--ink,#3b2a35);stroke-width:3;stroke-linecap:round;stroke-linejoin:round',
+  eye: 'fill:var(--ink,#3b2a35)',
+  shine: 'fill:#fff',
+  blush: 'fill:var(--pop,#ff6fa5);opacity:.45',
+  berry: 'fill:var(--pop,#ff6fa5);stroke:var(--ink,#3b2a35);stroke-width:3;stroke-linejoin:round',
+  seed: 'fill:#fff;opacity:.85',
+  leaf: 'fill:var(--ok,#6cc08b);stroke:var(--ink,#3b2a35);stroke-width:3.2;stroke-linejoin:round',
+};
+
+function mpart(p, par) {
+  const e = document.createElementNS('http://www.w3.org/2000/svg', p[0]);
+  if (p[0] === 'path') e.setAttribute('d', p[2]);
+  else for (let i = 2; i < p.length; i += 2) e.setAttribute(p[i], p[i + 1]);
+  e.setAttribute('style', MS[p[1]]);
+  par.append(e);
+}
+
+export function mascot() {
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('viewBox', '0 0 120 128');
+  s.setAttribute('class', 'mascot');
+  s.setAttribute('aria-hidden', 'true');
+  MA.forEach(p => mpart(p, s));
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  g.setAttribute('transform', 'rotate(-9 60 30)');
+  MB.forEach(p => mpart(p, g));
+  s.append(g);
+  return s;
+}
+
 export function empty(text, action) {
   return h('div', { class: 'card col', style: { alignItems: 'center', textAlign: 'center' } },
-    h('p', { class: 'muted' }, text), action || null);
+    mascot(), h('p', { class: 'muted' }, text), action || null);
 }
 
 export function fmtMins(n) {

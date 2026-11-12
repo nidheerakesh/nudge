@@ -14,9 +14,16 @@ test('icons are 12x12 with allowed chars', () => {
   assert.equal(iconRows('nope'), null);
 });
 
-test('css tokens in all three blocks', () => {
+test('kit tokens alias the palette, skins cover light and dark', () => {
   const css = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
-  for (const t of ['--k-panel:', '--k-edge:', '--k-ink:']) assert.equal(css.split(t).length - 1, 3, t);
+  for (const t of ['--k-panel:var(', '--k-edge:var(', '--k-ink:var(']) assert.equal(css.split(t).length - 1, 1, t);
+  const tok = readFileSync(new URL('../public/css/cute-tokens.css', import.meta.url), 'utf8');
+  for (const s of ['bubblegum', 'matcha', 'peach', 'starlight']) {
+    assert.ok(tok.includes(`html[data-skin=${s}]`), s);
+    const dark = s === 'bubblegum' ? 'html[data-theme=dark]{' : `html[data-theme=dark][data-skin=${s}]`;
+    assert.ok(tok.includes(dark), s + ' dark');
+  }
+  assert.ok(tok.includes('prefers-color-scheme:dark'));
 });
 
 test('town.js cleaned up', () => {

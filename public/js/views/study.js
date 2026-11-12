@@ -64,8 +64,8 @@ export default function view(root, ctx) {
       return h('div', { class: 'card col' },
         ui.field('Course name', bind('name', h('input', { type: 'text', placeholder: 'e.g. Calculus' }))),
         h('div', { class: 'row' },
-          h('div', { class: 'grow' }, ui.field('Code (optional)', bind('code', h('input', { type: 'text' })))),
-          h('div', { class: 'grow' }, ui.field('Next exam (optional)', bind('date', h('input', { type: 'date' }))))),
+          h('div', { class: 'grow', style: { flexBasis: '150px' } }, ui.field('Code (optional)', bind('code', h('input', { type: 'text' })))),
+          h('div', { class: 'grow', style: { flexBasis: '150px' } }, ui.field('Next exam (optional)', bind('date', h('input', { type: 'date' }))))),
         ui.field('Topics, one per line (optional)', bind('topics', h('textarea', { rows: 4 }))),
         rows.length > 1 ? btn('Remove', () => { rows.splice(i, 1); draw(); }, 'btn ghost') : null);
     }));
@@ -250,7 +250,7 @@ export default function view(root, ctx) {
     const tl = ts.length ? h('div', { class: 'col' }, h('span', { class: 'small' }, 'Topics covered'), ts.map(tp =>
       h('label', { class: 'row' }, h('input', { type: 'checkbox', checked: picks.has(tp.id), onchange: e => { e.target.checked ? picks.add(tp.id) : picks.delete(tp.id); } }), h('span', null, tp.title)))) : null;
     const s = ui.sheet(a ? 'Edit assessment' : 'Add assessment', h('div', { class: 'col' }, kb, ui.field('Title', ti),
-      h('div', { class: 'row' }, h('div', { class: 'grow' }, ui.field('Date', da)), h('div', { class: 'grow' }, ui.field('Time', tm))), tl,
+      h('div', { class: 'row' }, h('div', { class: 'grow', style: { flexBasis: '150px' } }, ui.field('Date', da)), h('div', { class: 'grow', style: { flexBasis: '150px' } }, ui.field('Time', tm))), tl,
       h('div', { class: 'row' }, h('button', { class: 'btn primary', type: 'button', onclick: go }, 'Save'),
         a ? h('button', { class: 'btn danger', type: 'button', onclick: rm }, 'Delete') : null)));
   }
