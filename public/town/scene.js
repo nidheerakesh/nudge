@@ -23,6 +23,7 @@ export function staticRect(foot, spriteW, spriteH) {
 }
 
 export function spawnTile(tpl) {
+  if (tpl.spawn) return tpl.spawn
   const f = tpl.fountain
   return { x: f.x + Math.floor(f.w / 2), y: f.y + f.h }
 }

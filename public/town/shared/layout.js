@@ -325,22 +325,37 @@ function decorate(st, feat) {
   return decor
 }
 
+function spawnAt(g, sol, f, real) {
+  const seen = reach(g, sol, { x: f.x + 2, y: f.y + 3 })
+  const r = real.find(a => a.name) || real[0]
+  if (!r) return null
+  const cx = r.x + Math.floor(r.w / 2), cy = r.y + r.h
+  for (let d = 0; d <= 6; d++) for (let j = -d; j <= d; j++) for (const i of [-(d - Math.abs(j)), d - Math.abs(j)]) {
+    if (seen.has(key(cx + i, cy + j))) return { x: cx + i, y: cy + j }
+  }
+  return null
+}
+
 function finish(c, st, real, feat) {
   const g = st.g
   const doors = [...st.plots.map(p => p.door), ...c.landmarks.map(l => l.door)]
   if (!carve(g, solidSet(c, st.plots, real, []), doors, c.fountain)) return null
   let decor = decorate(st, feat)
   const before = g.map(r => r.slice())
-  const trees = decor.filter(d => d.kind === 'tree')
+  let trees = decor.filter(d => d.kind === 'tree')
   if (!carve(g, solidSet(c, st.plots, real, trees), doors, c.fountain)) {
     g.forEach((r, y) => { g[y] = before[y] })
     decor = decor.filter(d => d.kind !== 'tree')
+    trees = []
     if (!carve(g, solidSet(c, st.plots, real, []), doors, c.fountain)) return null
   }
-  return {
+  const res = {
     v: 1, w: W, h: H, ground: g, plots: st.plots, landmarks: c.landmarks, fountain: c.fountain,
     square: c.square, decor, lilies: [], gates: c.gates, real,
   }
+  const sp = spawnAt(g, solidSet(c, st.plots, real, trees), c.fountain, real)
+  if (sp) res.spawn = sp
+  return res
 }
 
 export function makeLayout(feat) {
