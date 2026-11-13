@@ -5,6 +5,7 @@ import { createInteriorScene } from '/town/interior.js';
 import { drawAvatar, portrait } from '/town/avatar.js';
 import { createMinimap } from '/town/minimap.js';
 import { makeLayouts } from '/town/layouts.js';
+import { campusOf, want3d, set3d, canGl, loadCampus } from '/town/campus/index.js';
 import { connect } from '/town/net.js';
 import { TICK_MS } from '/town/shared/protocol.js';
 import { createTimerWidget } from '/town/ui/timerwidget.js';
@@ -64,6 +65,7 @@ function mount(c0) {
   let district = 0;
   let plots = [];
   let lay = null;
+  let kit3 = null;
   let pending = null;
   let pendT = 0;
   let wasMoving = false;
@@ -236,6 +238,8 @@ function mount(c0) {
   }
 
   // ---------- street ----------
+  const BLANK = { update() {}, draw() {} };
+  const hide3d = (on) => { if (town && town.pause) town.pause(on); };
   function sceneMe(extra) {
     const a = me.avatar || {};
     return { id: uid(), name: a.name || '', look: a, st: 'idle', act: 'active', ...(extra || {}) };
@@ -248,15 +252,37 @@ function mount(c0) {
     drawAvatar(ctx, look, { anim: moving ? 'walk' : 'idle', dir: moving ? o.dir : 'd', frame: moving ? Math.floor(t * 8) : 0 }, x, y);
   }
 
+  function build3d(spawn) {
+    if (town && town.is3d && town.district === district) {
+      town.setPlayers([...seen.values()]);
+      town.pause(false);
+      return true;
+    }
+    if (town) { town.destroy(); town = null; }
+    try {
+      town = kit3.scene.createCampusScene({ ...kit3, host: el, plots, players: [...seen.values()], me: sceneMe(spawn) });
+      town.district = district;
+    } catch (e) {
+      town = null;
+      kit3 = null;
+      ui.toast('3D view is not available here, showing 2D');
+      return false;
+    }
+    return true;
+  }
+
   function buildTown(spawn) {
-    if (town) town.destroy();
-    town = createTownScene({
-      engine, district, plots, layout: lay.tpl, players: [...seen.values()], me: sceneMe(spawn), drawAvatar: sceneAvatar,
-    });
+    const flat = !kit3 || !build3d(spawn);
+    if (flat) {
+      if (town) town.destroy();
+      town = createTownScene({
+        engine, district, plots, layout: lay.tpl, players: [...seen.values()], me: sceneMe(spawn), drawAvatar: sceneAvatar,
+      });
+    }
     town.onDoor = onDoor;
     town.onLandmark = onLandmark;
     town.onPlayer = (id) => { const p = seen.get(id); if (id !== uid() && p && p.name) lazy('/town/ui/friends.js', 'openPlayerCard', { id, name: p.name }); };
-    engine.setScene(town);
+    engine.setScene(flat ? town : BLANK);
     lastKey = null;
     bar.show(mode === 'street');
     presence();
@@ -283,6 +309,16 @@ function mount(c0) {
     if (dead()) return;
     lay = await layouts.load(n);
     if (dead()) return;
+    const cid = campusOf(lay);
+    kit3 = null;
+    if (cid && want3d() && canGl()) {
+      try { kit3 = await loadCampus(cid); } catch (e) { kit3 = null; }
+      if (dead()) return;
+    }
+    viewPill.hidden = !cid || !canGl();
+    viewLbl.textContent = kit3 ? '2D view' : '3D view';
+    viewPill.title = viewLbl.textContent;
+    viewPill.setAttribute('aria-label', viewLbl.textContent);
     for (const p of plots) if (p.owner) names.set(p.owner.id, p.owner.name);
     buildTown(spawn);
     placeUpdate();
@@ -456,6 +492,7 @@ function mount(c0) {
   async function enterHouse(owner) {
     if (mode !== 'street') return;
     mode = 'house';
+    hide3d(true);
     bar.show(false);
     houseOwner = owner;
     houseFails = 0;
@@ -466,7 +503,7 @@ function mount(c0) {
     let info = null;
     try { info = await tctx.get('/house/' + owner); } catch (e) { info = null; }
     if (dead()) return;
-    if (!info) { mode = 'street'; ui.toast(whyText('closed')); return; }
+    if (!info) { mode = 'street'; hide3d(false); ui.toast(whyText('closed')); return; }
     if (info.owner && info.owner.name) names.set(owner, info.owner.name);
     openHouseNet(owner, info);
   }
@@ -548,6 +585,7 @@ function mount(c0) {
     const hall = kind === 'library' || kind === 'hall';
     if (!hall && !SHOP_KINDS.includes(kind)) return;
     mode = 'shop';
+    hide3d(true);
     bar.show(false);
     if (town) lastPos = town.player();
     inside = { k: hall ? 'hall' : 'shop', kind: hall ? 'hall' : kind };
@@ -683,10 +721,13 @@ function mount(c0) {
   chatPill.hidden = true;
   const wardPill = pill('Wardrobe', () => lazy('/town/ui/wardrobe.js', 'openWardrobe'), null, 'shirt');
   const housePill = pill('House', () => lazy('/town/ui/housedit.js', 'openHouseEditor'), null, 'house');
+  const viewPill = pill('3D view', () => { if (mode !== 'street') return; set3d(!kit3); enterDistrict(district); }, null, 'map');
+  const viewLbl = viewPill.querySelector('.k-lbl');
+  viewPill.hidden = true;
 
   async function start() {
     tctx.onBalance(me.balance);
-    pills.replaceChildren(coin, pbar, pill('Map', toggleMap, null, 'map'), chatPill, wardPill, housePill, pill('Guide', () => lazy('/town/ui/guide.js', 'openGuide'), null, 'heart'), pill('Friends', () => lazy('/town/ui/friends.js', 'openFriends'), null, 'party'), pill('Settings', settings, null, 'gear'));
+    pills.replaceChildren(coin, pbar, pill('Map', toggleMap, null, 'map'), viewPill, chatPill, wardPill, housePill, pill('Guide', () => lazy('/town/ui/guide.js', 'openGuide'), null, 'heart'), pill('Friends', () => lazy('/town/ui/friends.js', 'openFriends'), null, 'party'), pill('Settings', settings, null, 'gear'));
     canvas = h('canvas', {
       role: 'img', tabindex: '0',
       'aria-label': 'Nudge Town. Use the arrow keys or tap to walk around. Walk to a door to knock.',

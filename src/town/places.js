@@ -134,6 +134,6 @@ export async function freeSlot(db, n) {
 }
 
 export async function districtInfo(db, n) {
-  const r = await db.prepare('SELECT p.name, p.display, p.feat FROM districts d JOIN places p ON p.id=d.place_id WHERE d.n=?').bind(n).first();
-  return { n, place: r ? { name: r.name, display: r.display } : null, feat: r && r.feat ? JSON.parse(r.feat) : null };
+  const r = await db.prepare('SELECT p.name, p.display, p.osm, p.feat FROM districts d JOIN places p ON p.id=d.place_id WHERE d.n=?').bind(n).first();
+  return { n, place: r ? { name: r.name, display: r.display, osm: r.osm } : null, feat: r && r.feat ? JSON.parse(r.feat) : null };
 }
